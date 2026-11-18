@@ -1,0 +1,54 @@
+name: Despliegue Controlado
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Etiqueta o tag de release a desplegar (ej. v0.1.0 o sha-xxxxxxx)
+        required: true
+        type: string
+      target_environment:
+        description: Destino de despliegue
+        required: true
+        default: local-compose
+        type: choice
+        options:
+          - local-compose
+          - staging
+          - production
+      confirm_backup_taken:
+        description: Confirma respaldo verificable de PostgreSQL antes de migrar
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  precheck-and-deploy:
+    name: Verificación previa y despliegue
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar respaldo obligatorio para entornos remotos
+        run: |
+          if [[ "${{ inputs.target_environment }}" != "local-compose" && "${{ inputs.confirm_backup_taken }}" != "true" ]]; then
+            echo "ERROR: Debe confirmar el respaldo verificable de PostgreSQL antes de desplegar."
+            exit 1
+          fi
+      - name: Validar compose y compatibilidad de migraciones
+        run: |
+          docker compose -f compose.yaml --env-file .env.example config -q
+          ls -1 apps/api/src/main/resources/db/migration/V*.sql
+      - name: Ejecutar despliegue reproducible local-compose o guía de promoción
+        run: |
+          if [[ "${{ inputs.target_environment }}" == "local-compose" ]]; then
+            docker compose -f compose.yaml --env-file .env.example up -d --build --wait
+            curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'
+            curl -fsS http://127.0.0.1:8080/api/v1/system/info | grep -q 'Lima-Huancayo'
+            docker compose -f compose.yaml --env-file .env.example down -v
+          else
+            echo "Destino remoto '${{ inputs.target_environment }}' pendiente de configurar host SSH/TLS y secretos de entorno."
+            echo "Siga docs/deployment-and-rollback.md usando el digest exacto de release '${{ inputs.release_tag }}'."
+          fi

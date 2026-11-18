@@ -1,0 +1,92 @@
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-transporte_central}
+      POSTGRES_USER: ${POSTGRES_USER:-transporte_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_local_only}
+      TZ: UTC
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-transporte_app} -d $${POSTGRES_DB:-transporte_central}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  risk:
+    build:
+      context: ./services/risk
+    environment:
+      RISK_MODEL_MODE: ${RISK_MODEL_MODE:-DEMO}
+      RISK_RANDOM_SEED: ${RISK_RANDOM_SEED:-42}
+      APP_DELAY_THRESHOLD_MINUTES: ${APP_DELAY_THRESHOLD_MINUTES:-30}
+    networks:
+      - internal_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-compose}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-transporte_central}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-transporte_app}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-changeme_local_only}
+      APP_TIMEZONE: ${APP_TIMEZONE:-America/Lima}
+      APP_CURRENCY: ${APP_CURRENCY:-PEN}
+      APP_DELAY_THRESHOLD_MINUTES: ${APP_DELAY_THRESHOLD_MINUTES:-30}
+      APP_COOKIE_SECURE: ${APP_COOKIE_SECURE:-false}
+      RISK_SERVICE_URL: ${RISK_SERVICE_URL:-http://risk:8000}
+      OPEN_METEO_BASE_URL: ${OPEN_METEO_BASE_URL:-https://api.open-meteo.com/v1/forecast}
+      OPEN_METEO_TIMEOUT_MS: ${OPEN_METEO_TIMEOUT_MS:-3500}
+      OPEN_METEO_CACHE_TTL_MINUTES: ${OPEN_METEO_CACHE_TTL_MINUTES:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      risk:
+        condition: service_healthy
+    networks:
+      - internal_net
+      - edge_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+
+  web:
+    build:
+      context: ./apps/web
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - edge_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/healthz | grep -q 'ok'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  edge_net:
+    driver: bridge
+  internal_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:

@@ -1,0 +1,604 @@
+openapi: 3.1.0
+info:
+  title: API Pública Interna - Expreso Corredor Central
+  version: 0.1.0
+  description: >
+    Contrato v1 del monolito modular Spring Boot para el corredor demostrativo Lima–Huancayo.
+    Fechas almacenadas y transmitidas en UTC (ISO-8601) y presentadas en hora de Perú (America/Lima).
+    Importes decimales expresados en PEN. Autenticación por cookie HttpOnly y protección CSRF.
+servers:
+  - url: /api/v1
+    description: Mismo origen vía proxy web
+security:
+  - sessionCookie: []
+    csrfHeader: []
+paths:
+  /system/info:
+    get:
+      tags: [Sistema]
+      summary: Metadatos operativos y estado del esquema inicial
+      security: []
+      responses:
+        "200":
+          description: Estado operativo base
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfoResponse"
+              example:
+                corridor: Lima-Huancayo
+                company: Expreso Corredor Central S.A.C.
+                timezone: America/Lima
+                currency: PEN
+                delayThresholdMinutes: 30
+                roles: [ADMIN, OPERADOR]
+                schemaInitialized: true
+                seededRouteSegments: 6
+
+  /auth/login:
+    post:
+      tags: [Sesión]
+      summary: Iniciar sesión con cookie HttpOnly
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              username: operador.lima
+              password: "********"
+      responses:
+        "200":
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSummary"
+        "401":
+          $ref: "#/components/responses/ProblemResponse"
+
+  /auth/logout:
+    post:
+      tags: [Sesión]
+      summary: Cerrar sesión actual
+      responses:
+        "204":
+          description: Sesión cerrada
+
+  /auth/me:
+    get:
+      tags: [Sesión]
+      summary: Usuario autenticado y rol vigente
+      responses:
+        "200":
+          description: Perfil de sesión
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSummary"
+        "401":
+          $ref: "#/components/responses/ProblemResponse"
+
+  /users:
+    get:
+      tags: [Catálogos]
+      summary: Listar usuarios internos (solo ADMIN)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          description: Lista paginada de usuarios
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedResponse"
+        "403":
+          $ref: "#/components/responses/ProblemResponse"
+    post:
+      tags: [Catálogos]
+      summary: Registrar usuario interno (solo ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, fullName, role, password]
+              properties:
+                username: { type: string }
+                fullName: { type: string }
+                role: { $ref: "#/components/schemas/Role" }
+                password: { type: string, format: password }
+      responses:
+        "201":
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSummary"
+
+  /passengers:
+    get:
+      tags: [Catálogos]
+      summary: Buscar pasajeros paginados por documento o nombre
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: documentNumber
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Lista paginada de pasajeros
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedResponse"
+    post:
+      tags: [Catálogos]
+      summary: Registrar pasajero ficticio o de operación
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [documentType, documentNumber, fullName]
+              properties:
+                documentType: { type: string, enum: [DNI, CE, PASAPORTE] }
+                documentNumber: { type: string }
+                fullName: { type: string }
+      responses:
+        "201":
+          description: Pasajero creado
+
+  /buses:
+    get:
+      tags: [Catálogos]
+      summary: Listar flota de buses, capacidad y configuración de asientos
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: terminalCode
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Flota paginada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedResponse"
+    post:
+      tags: [Catálogos]
+      summary: Registrar bus y capacidad de pasajeros/carga
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plate, seatCapacity, cargoCapacityKg, homeTerminalCode]
+              properties:
+                plate: { type: string, example: "C4R-901" }
+                seatCapacity: { type: integer, minimum: 1 }
+                cargoCapacityKg: { type: number, format: double, minimum: 0 }
+                homeTerminalCode: { type: string, example: "HYO-TERM" }
+      responses:
+        "201":
+          description: Bus creado
+
+  /routes:
+    get:
+      tags: [Catálogos]
+      summary: Listar rutas y sus tramos con puntos meteorológicos
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+      responses:
+        "200":
+          description: Rutas paginadas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedResponse"
+
+  /trips:
+    get:
+      tags: [Viajes]
+      summary: Listar viajes programados con filtros por ruta, estado y fecha
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: routeCode
+          in: query
+          schema: { type: string }
+        - name: fromUtc
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Viajes paginados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedResponse"
+    post:
+      tags: [Viajes]
+      summary: Programar viaje e inicializar inventario de asientos según bus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [routeCode, busId, scheduledDepartureUtc, scheduledArrivalUtc, baseFarePen]
+              properties:
+                routeCode: { type: string, example: "LIM-HYO-01" }
+                busId: { type: string, format: uuid }
+                scheduledDepartureUtc: { type: string, format: date-time }
+                scheduledArrivalUtc: { type: string, format: date-time }
+                turnaroundMinutes: { type: integer, default: 20 }
+                baseFarePen: { type: string, example: "65.00" }
+      responses:
+        "201":
+          description: Viaje programado con inventario de asientos
+
+  /trips/{id}/seats:
+    get:
+      tags: [Viajes]
+      summary: Obtener plano y disponibilidad de asientos del viaje
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Inventario de asientos del viaje
+
+  /trips/{id}/actual-times:
+    put:
+      tags: [Viajes]
+      summary: Registrar horarios reales de salida y llegada para historial y reportes
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actualDepartureUtc, actualArrivalUtc]
+              properties:
+                actualDepartureUtc: { type: string, format: date-time }
+                actualArrivalUtc: { type: string, format: date-time }
+                incidentNotes: { type: string }
+      responses:
+        "200":
+          description: Horarios reales actualizados
+
+  /sales:
+    post:
+      tags: [Ventas]
+      summary: Registrar venta de pasaje con bloqueo transaccional e idempotencia
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tripId, seatNumber, passengerId, amountPen]
+              properties:
+                tripId: { type: string, format: uuid }
+                seatNumber: { type: integer, minimum: 1 }
+                passengerId: { type: string, format: uuid }
+                amountPen: { type: string, example: "65.00" }
+      responses:
+        "201":
+          description: Venta registrada y boleto emitido
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+
+  /sales/{id}/cancel:
+    post:
+      tags: [Ventas]
+      summary: Anular venta vigente y liberar asiento
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        "200":
+          description: Venta anulada
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+
+  /tickets/{id}:
+    get:
+      tags: [Ventas]
+      summary: Consultar boleto interno emitido
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Detalle del boleto interno
+
+  /parcels:
+    post:
+      tags: [Encomiendas]
+      summary: Registrar encomienda asociada a un viaje
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tripId, senderName, recipientName, weightKg, amountPen]
+              properties:
+                tripId: { type: string, format: uuid }
+                senderName: { type: string }
+                recipientName: { type: string }
+                weightKg: { type: number, format: double, minimum: 0.1 }
+                amountPen: { type: string, example: "25.00" }
+      responses:
+        "201":
+          description: Encomienda registrada en estado RECIBIDA
+    get:
+      tags: [Encomiendas]
+      summary: Consultar encomiendas paginadas o por código de seguimiento
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SizeParam"
+        - name: trackingCode
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Encomiendas encontradas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PagedResponse"
+
+  /parcels/{id}/status-transitions:
+    post:
+      tags: [Encomiendas]
+      summary: Ejecutar transición válida RECIBIDA -> EN_TRANSPORTE -> ENTREGADA
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetStatus]
+              properties:
+                targetStatus: { $ref: "#/components/schemas/ParcelStatus" }
+                notes: { type: string }
+      responses:
+        "200":
+          description: Estado actualizado
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+
+  /trips/{id}/weather:
+    get:
+      tags: [Clima y Alertas]
+      summary: Consultar pronóstico por tramos y puntos del viaje
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Pronóstico vigente o estado Información insuficiente
+
+  /trips/{id}/weather-refreshes:
+    post:
+      tags: [Clima y Alertas]
+      summary: Refrescar pronóstico desde Open-Meteo respetando caché y timeout
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Consulta ejecutada o degradada con estado explícito
+
+  /road-alerts:
+    post:
+      tags: [Clima y Alertas]
+      summary: Registrar alerta vial manual por tramo (SUTRAN/MTC o simulada)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [segmentId, sourceName, status, originType, validUntilUtc]
+              properties:
+                segmentId: { type: string, format: uuid }
+                sourceName: { type: string, example: "SUTRAN" }
+                referenceUrl: { type: string }
+                status: { type: string, enum: [DESPEJADO, TRANSITO_RESTRINGIDO, CERRADO] }
+                originType: { type: string, enum: [OFICIAL_MANUAL, SIMULADA] }
+                validUntilUtc: { type: string, format: date-time }
+      responses:
+        "201":
+          description: Alerta registrada
+
+  /trips/{id}/risk-assessments:
+    post:
+      tags: [Riesgo y Contingencias]
+      summary: Evaluar riesgo experimental de retraso >= umbral configurado
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Evaluación registrada o degradación ante indisponibilidad
+
+  /trips/{id}/contingency-simulations:
+    post:
+      tags: [Riesgo y Contingencias]
+      summary: Simular retrasos de +30 y +60 minutos sobre viaje posterior del bus
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delayScenariosMinutes:
+                  type: array
+                  items: { type: integer }
+                  example: [30, 60]
+      responses:
+        "200":
+          description: Opciones evaluadas (mantener plan, bus de reserva, reprogramar)
+
+  /trips/{id}/contingency-decisions:
+    post:
+      tags: [Riesgo y Contingencias]
+      summary: Confirmar decisión del operador en transacción única con control de versión
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [simulationId, expectedTripVersion, actionType]
+              properties:
+                simulationId: { type: string, format: uuid }
+                expectedTripVersion: { type: integer }
+                actionType: { type: string, enum: [MANTENER_PLAN, ASIGNAR_BUS_RESERVA, REPROGRAMAR] }
+                reserveBusId: { type: string, format: uuid }
+                rationale: { type: string }
+      responses:
+        "200":
+          description: Decisión aplicada con auditoría
+        "409":
+          $ref: "#/components/responses/ProblemResponse"
+
+  /reports/operations:
+    get:
+      tags: [Reportes]
+      summary: Reporte de ocupación, ingresos separados por pasajes y encomiendas, clima y tiempos reales
+      parameters:
+        - name: fromUtc
+          in: query
+          schema: { type: string, format: date-time }
+        - name: toUtc
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Indicadores operativos en PEN
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-XSRF-TOKEN
+
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PageParam:
+      name: page
+      in: query
+      schema: { type: integer, default: 0, minimum: 0 }
+    SizeParam:
+      name: size
+      in: query
+      schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
+
+  responses:
+    ProblemResponse:
+      description: Error estándar RFC 7807 Problem Details
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+  schemas:
+    Role:
+      type: string
+      enum: [ADMIN, OPERADOR]
+    ParcelStatus:
+      type: string
+      enum: [RECIBIDA, EN_TRANSPORTE, ENTREGADA]
+    DataFreshnessStatus:
+      type: string
+      enum: [VIGENTE, POR_VERIFICAR, INFORMACION_INSUFICIENTE, DEMO]
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    UserSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        fullName: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+    SystemInfoResponse:
+      type: object
+      properties:
+        corridor: { type: string }
+        company: { type: string }
+        timezone: { type: string }
+        currency: { type: string }
+        delayThresholdMinutes: { type: integer }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/Role" }
+        modules:
+          type: array
+          items: { type: string }
+        schemaInitialized: { type: boolean }
+        seededRouteSegments: { type: integer }
+    PagedResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { type: object }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer }
+        totalPages: { type: integer }
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlationId: { type: string }
+        timestampUtc: { type: string, format: date-time }
