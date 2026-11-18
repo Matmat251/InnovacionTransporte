@@ -30,7 +30,11 @@ import static org.assertj.core.api.Assertions.assertThat;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "app.risk-service-url=http://127.0.0.1:19999",
-                "app.open-meteo-base-url=http://127.0.0.1:19998"
+                "app.open-meteo-base-url=http://127.0.0.1:19998",
+                "app.senamhi-wfs-url=http://127.0.0.1:19997",
+                "app.mtc-concessions-geojson-url=http://127.0.0.1:19997",
+                "app.mtc-alt-routes-geojson-url=http://127.0.0.1:19997",
+                "app.sutran-alerts-url=http://127.0.0.1:19997"
         }
 )
 @ActiveProfiles("test")
@@ -204,6 +208,12 @@ class OperationalFlowsIntegrationTest {
     @Test
     void contingencyAcceptanceDemoHandlesReserveBusStaleVersionClosureAndRiskFallback() throws Exception {
         SessionClient op = login("operador.hyo", "Demo2026!");
+
+        // Degradación controlada cuando fuentes oficiales/externas no responden
+        HttpResponse<String> syncDown = op.post("/api/v1/trips/" + TRIP_1_ID + "/official-sources-sync", Map.of(), null);
+        assertThat(syncDown.statusCode()).isEqualTo(200);
+        assertThat(objectMapper.readTree(syncDown.body()).path("senamhiStatus").asText()).isEqualTo("NO_DISPONIBLE");
+        assertThat(objectMapper.readTree(syncDown.body()).path("sutranApiStatus").asText()).isEqualTo("NO_DISPONIBLE");
 
         // Degradación controlada cuando FastAPI y Open-Meteo están caídos
         HttpResponse<String> riskDown = op.post("/api/v1/trips/" + TRIP_1_ID + "/risk-assessments", Map.of(), null);
