@@ -1,0 +1,38 @@
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Documentos académicos fuente y datos reales (no versionar en el repo)
+*apf1*.docx
+*apf2*.docx
+*APF1*.docx
+*APF2*.docx
+*.xlsx
+data/real/
+
+# Java / Maven
+apps/api/target/
+apps/api/.mvn/wrapper/maven-wrapper.jar
+*.log
+
+# Node / Angular
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.angular/
+
+# Python / FastAPI / ML
+services/risk/.venv/
+services/risk/__pycache__/
+services/risk/.pytest_cache/
+services/risk/**/__pycache__/
+services/risk/artifacts/*.joblib
+*.pyc
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
