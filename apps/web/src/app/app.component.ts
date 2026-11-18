@@ -76,6 +76,7 @@ export class AppComponent implements OnInit {
   selectedTrip: TripItem | null = null;
   weatherData: any = null;
   roadAlerts: any[] = [];
+  routesList: any[] = [];
   availableSegments: any[] = [];
   latestRisk: any = null;
   simulation: any = null;
@@ -86,6 +87,7 @@ export class AppComponent implements OnInit {
   parcels: any[] = [];
   parcelFilter = '';
   buses: any[] = [];
+  usersList: UserSummary[] = [];
   report: any = null;
 
   alertForm = {
@@ -103,6 +105,12 @@ export class AppComponent implements OnInit {
     idempotencyKey: 'venta-web-' + Date.now(),
   };
 
+  passengerForm = {
+    documentType: 'DNI',
+    documentNumber: '',
+    fullName: '',
+  };
+
   parcelForm = {
     senderName: '',
     recipientName: '',
@@ -115,6 +123,35 @@ export class AppComponent implements OnInit {
     actualArrivalUtc: '2026-11-20T21:10:00Z',
     incidentNotes: '',
   };
+
+  busForm = {
+    plate: '',
+    model: 'Volvo B430R',
+    seatCapacity: 32,
+    cargoCapacityKg: 1000,
+    homeTerminalCode: 'LIM-YERB',
+    turnaroundMinutes: 20,
+  };
+
+  tripForm = {
+    routeCode: 'LIM-HYO-01',
+    busId: '',
+    scheduledDepartureUtc: '2026-11-22T12:00:00Z',
+    scheduledArrivalUtc: '2026-11-22T20:00:00Z',
+    turnaroundMinutes: 20,
+    baseFarePen: 65.0,
+  };
+
+  userForm = {
+    username: '',
+    fullName: '',
+    role: 'OPERADOR',
+    password: '',
+  };
+
+  get isAdmin(): boolean {
+    return this.currentUser?.role === 'ADMIN';
+  }
 
   ngOnInit(): void {
     this.http.get<SystemInfo>('/api/v1/system/info').subscribe({
@@ -156,6 +193,8 @@ export class AppComponent implements OnInit {
         this.currentUser = null;
         this.trips = [];
         this.selectedTrip = null;
+        this.usersList = [];
+        this.lastTicket = null;
       },
       error: () => {
         this.currentUser = null;
@@ -204,6 +243,7 @@ export class AppComponent implements OnInit {
   selectTrip(trip: TripItem): void {
     this.selectedTrip = trip;
     this.simulation = null;
+    this.lastTicket = null;
     this.saleForm.amountPen = trip.baseFarePen;
     this.loadWeather(trip.id);
     this.loadRoadAlerts(trip.routeId);
@@ -214,6 +254,7 @@ export class AppComponent implements OnInit {
   loadRoutesAndSegments(): void {
     this.http.get<{ items: any[] }>('/api/v1/routes').subscribe({
       next: (res) => {
+        this.routesList = res.items;
         this.availableSegments = res.items.flatMap((r) =>
           (r.segments || []).map((s: any) => ({ ...s, routeCode: r.code }))
         );
@@ -320,8 +361,30 @@ export class AppComponent implements OnInit {
   }
 
   selectSeat(seat: any): void {
-    this.saleForm.seatNumber = seat.seatNumber;
-    this.regenerateIdempotencyKey();
+    if (seat.status === 'DISPONIBLE') {
+      this.saleForm.seatNumber = seat.seatNumber;
+      this.regenerateIdempotencyKey();
+      return;
+    }
+    if (seat.activeTicketId) {
+      this.http.get<any>(`/api/v1/tickets/${seat.activeTicketId}`).subscribe({
+        next: (t) => {
+          this.lastTicket = {
+            saleId: t.saleId,
+            ticketId: t.ticketId,
+            ticketCode: t.ticketCode,
+            seatNumber: t.seatNumber,
+            amountPen: t.amountPen,
+            ticketStatus: t.status,
+            saleStatus: t.status === 'EMITIDO' ? 'VIGENTE' : 'ANULADA',
+            passengerName: t.passengerName,
+            idempotentReplay: false,
+          };
+          this.infoMessage = `Boleto ${t.ticketCode} consultado para el asiento #${t.seatNumber}.`;
+        },
+        error: (err) => this.handleError(err, 'No se pudo consultar el boleto del asiento.'),
+      });
+    }
   }
 
   regenerateIdempotencyKey(): void {
@@ -336,6 +399,20 @@ export class AppComponent implements OnInit {
           this.saleForm.passengerId = res.items[0].id;
         }
       },
+    });
+  }
+
+  createPassenger(): void {
+    this.busy = true;
+    this.http.post<any>('/api/v1/passengers', this.passengerForm).subscribe({
+      next: (created) => {
+        this.busy = false;
+        this.passengerForm = { documentType: 'DNI', documentNumber: '', fullName: '' };
+        this.saleForm.passengerId = created.id;
+        this.infoMessage = `Pasajero ${created.fullName} registrado.`;
+        this.loadPassengers();
+      },
+      error: (err) => this.handleError(err, 'No se pudo registrar al pasajero (verifica documento único).'),
     });
   }
 
@@ -422,9 +499,76 @@ export class AppComponent implements OnInit {
     });
   }
 
+  createBus(): void {
+    this.busy = true;
+    this.http.post<any>('/api/v1/buses', this.busForm).subscribe({
+      next: (created) => {
+        this.busy = false;
+        this.busForm.plate = '';
+        this.infoMessage = `Bus ${created.plate} incorporado a flota (solo ADMIN).`;
+        this.loadReportsAndCatalogs();
+      },
+      error: (err) => this.handleError(err, 'Error al registrar bus (requiere rol ADMIN).'),
+    });
+  }
+
+  createTrip(): void {
+    this.busy = true;
+    this.http.post<any>('/api/v1/trips', this.tripForm).subscribe({
+      next: (created) => {
+        this.busy = false;
+        this.infoMessage = `Viaje programado en ruta ${created.routeCode} con ${created.enabledSeats} asientos.`;
+        this.loadTrips();
+      },
+      error: (err) => this.handleError(err, 'Error al programar viaje (requiere rol ADMIN).'),
+    });
+  }
+
+  createUser(): void {
+    this.busy = true;
+    this.http.post<UserSummary>('/api/v1/users', this.userForm).subscribe({
+      next: (created) => {
+        this.busy = false;
+        this.userForm = { username: '', fullName: '', role: 'OPERADOR', password: '' };
+        this.infoMessage = `Usuario ${created.username} (${created.role}) creado por ADMIN.`;
+        this.loadReportsAndCatalogs();
+      },
+      error: (err) => this.handleError(err, 'No se pudo crear el usuario.'),
+    });
+  }
+
+  testOperatorForbidden(): void {
+    this.http.post('/api/v1/buses', {
+      plate: 'TST-403',
+      model: 'Prueba RBAC',
+      seatCapacity: 30,
+      cargoCapacityKg: 500,
+      homeTerminalCode: 'LIM-YERB',
+      turnaroundMinutes: 20,
+    }).subscribe({
+      next: () => {
+        this.infoMessage = 'Bus creado.';
+      },
+      error: (err) => this.handleError(err, 'Bloqueado por rol en backend (403).'),
+    });
+  }
+
   loadReportsAndCatalogs(): void {
     this.http.get('/api/v1/reports/operations').subscribe({ next: (r) => (this.report = r) });
-    this.http.get<{ items: any[] }>('/api/v1/buses').subscribe({ next: (b) => (this.buses = b.items) });
+    this.http.get<{ items: any[] }>('/api/v1/buses?size=50').subscribe({
+      next: (b) => {
+        this.buses = b.items;
+        if (!this.tripForm.busId && b.items.length > 0) {
+          this.tripForm.busId = b.items[0].id;
+        }
+      },
+    });
+    if (this.isAdmin) {
+      this.http.get<{ items: UserSummary[] }>('/api/v1/users?size=50').subscribe({
+        next: (u) => (this.usersList = u.items),
+        error: () => {},
+      });
+    }
   }
 
   badgeClass(status: string): string {

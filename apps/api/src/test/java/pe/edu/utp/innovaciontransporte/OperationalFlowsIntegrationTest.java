@@ -58,6 +58,17 @@ class OperationalFlowsIntegrationTest {
         HttpResponse<String> forbiddenUsers = operador.get("/api/v1/users");
         assertThat(forbiddenUsers.statusCode()).isEqualTo(403);
 
+        HttpResponse<String> forbiddenBus = operador.post("/api/v1/buses",
+                Map.of("plate", "OPR-001", "model", "Test", "seatCapacity", 30, "cargoCapacityKg", 800,
+                        "homeTerminalCode", "LIM-YERB", "turnaroundMinutes", 20), null);
+        assertThat(forbiddenBus.statusCode()).isEqualTo(403);
+
+        HttpResponse<String> forbiddenTrip = operador.post("/api/v1/trips",
+                Map.of("routeCode", "LIM-HYO-01", "busId", BUS_VIABLE_ID,
+                        "scheduledDepartureUtc", "2026-11-25T12:00:00Z", "scheduledArrivalUtc", "2026-11-25T20:00:00Z",
+                        "turnaroundMinutes", 20, "baseFarePen", "65.00"), null);
+        assertThat(forbiddenTrip.statusCode()).isEqualTo(403);
+
         // Mutación sin cabecera CSRF debe rechazarse con 403
         HttpResponse<String> missingCsrf = operador.postRawWithoutCsrf("/api/v1/passengers",
                 Map.of("documentType", "DNI", "documentNumber", "79999999", "fullName", "Sin CSRF"));
@@ -67,6 +78,23 @@ class OperationalFlowsIntegrationTest {
         HttpResponse<String> okUsers = admin.get("/api/v1/users");
         assertThat(okUsers.statusCode()).isEqualTo(200);
         assertThat(objectMapper.readTree(okUsers.body()).path("items").size()).isGreaterThanOrEqualTo(2);
+
+        HttpResponse<String> okBus = admin.post("/api/v1/buses",
+                Map.of("plate", "ADM-777", "model", "Scania K410", "seatCapacity", 28, "cargoCapacityKg", 900,
+                        "homeTerminalCode", "LIM-YERB", "turnaroundMinutes", 20), null);
+        assertThat(okBus.statusCode()).isEqualTo(201);
+        String newBusId = objectMapper.readTree(okBus.body()).path("id").asText();
+
+        HttpResponse<String> okTrip = admin.post("/api/v1/trips",
+                Map.of("routeCode", "LIM-HYO-01", "busId", newBusId,
+                        "scheduledDepartureUtc", "2026-11-25T12:00:00Z", "scheduledArrivalUtc", "2026-11-25T20:00:00Z",
+                        "turnaroundMinutes", 20, "baseFarePen", "70.00"), null);
+        assertThat(okTrip.statusCode()).isEqualTo(201);
+        String newTripId = objectMapper.readTree(okTrip.body()).path("id").asText();
+
+        HttpResponse<String> seatsRes = admin.get("/api/v1/trips/" + newTripId + "/seats");
+        assertThat(seatsRes.statusCode()).isEqualTo(200);
+        assertThat(objectMapper.readTree(seatsRes.body()).path("seats").size()).isEqualTo(28);
     }
 
     @Test
