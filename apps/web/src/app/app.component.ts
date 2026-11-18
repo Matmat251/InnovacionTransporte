@@ -80,6 +80,7 @@ export class AppComponent implements OnInit {
   availableSegments: any[] = [];
   latestRisk: any = null;
   simulation: any = null;
+  officialSync: any = null;
 
   seats: any[] = [];
   passengers: any[] = [];
@@ -243,6 +244,7 @@ export class AppComponent implements OnInit {
   selectTrip(trip: TripItem): void {
     this.selectedTrip = trip;
     this.simulation = null;
+    this.officialSync = null;
     this.lastTicket = null;
     this.saleForm.amountPen = trip.baseFarePen;
     this.loadWeather(trip.id);
@@ -302,6 +304,20 @@ export class AppComponent implements OnInit {
     });
   }
 
+  syncOfficialSources(): void {
+    if (!this.selectedTrip) return;
+    this.busy = true;
+    this.http.post<any>(`/api/v1/trips/${this.selectedTrip.id}/official-sources-sync`, {}).subscribe({
+      next: (res) => {
+        this.officialSync = res;
+        this.busy = false;
+        this.infoMessage = `Sincronización oficial: SENAMHI=${res.senamhiStatus} (${res.senamhiTotalCorridorStations} est.), MTC=${res.mtcStatus}, SUTRAN=${res.sutranApiStatus}, alertas nuevas=${res.generatedAlertsCount}.`;
+        this.loadRoadAlerts(this.selectedTrip!.routeId);
+      },
+      error: (err) => this.handleError(err, 'No se pudieron consultar las fuentes oficiales.'),
+    });
+  }
+
   loadRisk(tripId: string): void {
     this.http.get<{ assessments: any[] }>(`/api/v1/trips/${tripId}/risk-assessments`).subscribe({
       next: (res) => (this.latestRisk = res.assessments?.[0] || null),
@@ -329,7 +345,7 @@ export class AppComponent implements OnInit {
         this.simulation = res;
         this.busy = false;
       },
-      error: (err) => this.handleError(err, 'No se pudo simular contingencia.'),
+      error: (err) => this.handleError(err, 'No se pudo evaluar escenarios de contingencia.'),
     });
   }
 
@@ -342,7 +358,7 @@ export class AppComponent implements OnInit {
       actionType: option.actionType,
       reserveBusId: option.reserveBusId || null,
       newDepartureUtc: option.suggestedDepartureUtc || null,
-      rationale: 'Confirmación desde panel AndesRoute Central',
+      rationale: 'Confirmación operativa desde panel AndesRoute Central',
     }).subscribe({
       next: () => {
         this.busy = false;
@@ -350,7 +366,7 @@ export class AppComponent implements OnInit {
         this.simulation = null;
         this.loadTrips();
       },
-      error: (err) => this.handleError(err, 'Conflicto al confirmar contingencia; actualiza la simulación.'),
+      error: (err) => this.handleError(err, 'Conflicto al confirmar contingencia; actualiza la evaluación.'),
     });
   }
 
@@ -572,13 +588,10 @@ export class AppComponent implements OnInit {
   }
 
   badgeClass(status: string): string {
-    if (status === 'VIGENTE' || status === 'OK' || status === 'REAL') {
+    if (status === 'VIGENTE' || status === 'OK' || status === 'REAL' || status === 'CONECTADO') {
       return 'bg-emerald-100 text-emerald-900';
     }
-    if (status === 'DEMO') {
-      return 'bg-indigo-50 text-indigo-800';
-    }
-    if (status === 'POR_VERIFICAR') {
+    if (status === 'POR_VERIFICAR' || status === 'PROTEGIDO_WAF_202') {
       return 'bg-amber-100 text-amber-900';
     }
     return 'bg-rose-100 text-rose-900';

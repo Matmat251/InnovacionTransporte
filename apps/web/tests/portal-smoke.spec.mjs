@@ -10,14 +10,15 @@ test('portal aplica diseño Stitch AndesRoute Central con etiquetas y 4 bloques 
   const ts = fs.readFileSync(path.join(webRoot, 'src/app/app.component.ts'), 'utf8');
   assert.match(html, /AndesRoute/);
   assert.match(html, /PE-22/);
-  assert.match(html, /Demo/);
+  assert.doesNotMatch(html, /\bDemo\b|Simulador|Simular|Simulación|SIMULADA/);
   assert.match(html, /Información insuficiente/);
   assert.match(html, /Por verificar/);
   assert.match(ts, /America\/Lima/);
   assert.match(html, /1\. Pronóstico por tramo/);
   assert.match(html, /2\. Alertas viales/);
+  assert.match(html, /Sincronizar SENAMHI WFS/);
   assert.match(html, /3\. Riesgo experimental/);
-  assert.match(html, /4\. Simulador de contingencias/);
+  assert.match(html, /4\. Control de contingencias/);
   assert.match(html, /Distribución de Cabina/);
   assert.match(html, /ANDESROUTE CARGO/);
   assert.match(html, /RECIBIDA/);

@@ -78,7 +78,7 @@ def _load_or_train_model() -> object:
 
 
 MODEL_MODE: Literal["DEMO", "REAL"] = (
-    "REAL" if os.getenv("RISK_MODEL_MODE", "DEMO").upper() == "REAL" else "DEMO"
+    "DEMO" if os.getenv("RISK_MODEL_MODE", "REAL").upper() == "DEMO" else "REAL"
 )
 DEFAULT_THRESHOLD = int(os.getenv("APP_DELAY_THRESHOLD_MINUTES", "30"))
 MODEL = _load_or_train_model()

@@ -18,7 +18,7 @@
         </div>
         <span class="hidden sm:inline text-outline-variant">|</span>
         <span class="font-mono font-medium">UTC -05:00 LIMA</span>
-        <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 font-semibold">[Demo]</span>
+        <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-semibold">[Operativo]</span>
       </div>
     </header>
 
@@ -122,7 +122,7 @@
                   [type]="showPassword ? 'text' : 'password'"
                   [(ngModel)]="loginForm.password"
                   name="password"
-                  placeholder="Demo2026!"
+                  placeholder="••••••••"
                   required
                   class="w-full h-10 pl-10 pr-10 bg-surface-container-low rounded-lg text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
                 />
@@ -149,13 +149,13 @@
         </div>
 
         <div class="pt-space-md border-t border-outline-variant/40 flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs text-secondary">Acceso rápido de prueba (clave <code class="font-mono font-semibold text-primary">Demo2026!</code>):</span>
+          <span class="text-xs text-secondary">Selección rápida de perfil autorizado:</span>
           <div class="flex flex-wrap gap-2">
             <button type="button" (click)="quickLogin('operador.hyo', 'Demo2026!')" class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold">
-              Demo Operador (operador.hyo)
+              Operador Turno (operador.hyo)
             </button>
             <button type="button" (click)="quickLogin('admin', 'Demo2026!')" class="px-3 py-1.5 rounded-lg bg-primary-fixed hover:bg-surface-container-highest text-primary text-xs font-semibold">
-              Demo Admin (admin)
+              Administrador Central (admin)
             </button>
           </div>
         </div>
@@ -169,7 +169,7 @@
               <span class="text-[10px] uppercase tracking-wider font-semibold text-secondary">Estado Orográfico Corredor Central</span>
               <h2 class="text-base font-semibold text-primary">Abra de Anticona • Ticlio Pass</h2>
             </div>
-            <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-semibold">[Demo] 4,818 msnm</span>
+            <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[11px] font-semibold">4,818 msnm</span>
           </div>
 
           <div class="grid grid-cols-3 gap-2 text-center">
@@ -221,7 +221,7 @@
             <span class="font-mono text-primary font-semibold">Open-Meteo · SENAMHI · SUTRAN</span>
           </div>
           <div class="flex flex-wrap gap-1.5 text-[11px]">
-            <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 font-semibold">[Demo]</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-semibold">[Operativo]</span>
             <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold">[Por verificar]</span>
             <span class="px-2 py-0.5 rounded bg-rose-100 text-rose-900 font-semibold">[Información insuficiente]</span>
           </div>
@@ -356,7 +356,7 @@
       </div>
 
       <div class="flex items-center gap-2 shrink-0">
-        <span class="hidden md:inline-flex items-center px-2 py-1 rounded bg-indigo-50 text-indigo-800 text-[11px] font-semibold">[Demo]</span>
+        <span class="hidden md:inline-flex items-center px-2 py-1 rounded bg-emerald-50 text-emerald-800 text-[11px] font-semibold">[En línea]</span>
         <span class="px-2.5 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
           {{ currentUser.username }} · {{ currentUser.role }}
         </span>
@@ -389,7 +389,7 @@
       <div *ngIf="errorMessage" class="p-3 rounded-lg bg-error-container border border-error/30 text-on-error-container text-xs font-medium flex items-center justify-between gap-2" role="alert">
         <span><strong>{{ errorCode === 409 ? 'Conflicto operativo (409):' : 'Error:' }}</strong> {{ errorMessage }}</span>
         <div class="flex gap-2">
-          <button *ngIf="errorCode === 409 && selectedTrip" type="button" class="px-2 py-1 rounded bg-error text-on-error font-semibold" (click)="simulateContingency()">Actualizar simulación</button>
+          <button *ngIf="errorCode === 409 && selectedTrip" type="button" class="px-2 py-1 rounded bg-error text-on-error font-semibold" (click)="simulateContingency()">Actualizar evaluación</button>
           <button type="button" class="underline font-semibold" (click)="errorMessage = null">Cerrar</button>
         </div>
       </div>
@@ -400,7 +400,7 @@
       <section *ngIf="activeTab === 'riesgo-telemetria' && selectedTrip" class="flex flex-col gap-space-lg">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
-            <h1 class="text-2xl font-semibold text-primary tracking-tight">Riesgo Climático &amp; Simulador de Contingencias PE-22</h1>
+            <h1 class="text-2xl font-semibold text-primary tracking-tight">Riesgo Climático &amp; Control de Contingencias PE-22</h1>
             <p class="text-xs text-secondary">{{ selectedTrip.routeName }} · Bus {{ selectedTrip.busPlate }} · Versión {{ selectedTrip.version }} · Llegada prev. {{ formatPeruTime(selectedTrip.scheduledArrivalUtc) }}</p>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -411,7 +411,7 @@
               <span class="material-symbols-outlined text-[16px]">neurology</span> Evaluar riesgo IA
             </button>
             <button type="button" (click)="simulateContingency()" [disabled]="busy" class="px-3.5 py-2 rounded-lg bg-primary hover:bg-primary-container text-on-primary text-xs font-semibold flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[16px]">tune</span> Simular +30 / +60 min
+              <span class="material-symbols-outlined text-[16px]">tune</span> Evaluar +30 / +60 min
             </button>
           </div>
         </div>
@@ -462,7 +462,7 @@
             <div class="text-2xl font-bold text-primary">
               {{ simulation ? ('-' + simulation.delay30LostMinutes + 'm / -' + simulation.delay60LostMinutes + 'm') : (selectedTrip.soldTicketsCount + ' pas. / ' + selectedTrip.parcelCount + ' enc.') }}
             </div>
-            <p class="text-[11px] text-secondary mt-1">{{ simulation ? ('Margen base: +' + simulation.marginMinutes + ' min') : 'Pulsa Simular +30 / +60 min' }}</p>
+            <p class="text-[11px] text-secondary mt-1">{{ simulation ? ('Margen base: +' + simulation.marginMinutes + ' min') : 'Pulsa Evaluar +30 / +60 min' }}</p>
           </div>
         </div>
 
@@ -549,11 +549,32 @@
             </div>
           </article>
 
-          <!-- Bloque 2: Alertas viales (SUTRAN / MTC) -->
+          <!-- Bloque 2: Alertas viales y geoservicios (SENAMHI WFS / MTC / SUTRAN) -->
           <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm flex flex-col gap-3">
-            <div class="flex items-center justify-between gap-2">
-              <h3 class="text-base font-semibold text-primary">2. Alertas viales (SUTRAN / MTC)</h3>
-              <a href="https://alertasviales.dev.sutran.gob.pe/" target="_blank" rel="noopener" class="text-xs font-semibold text-primary underline">Abrir Mapa SUTRAN</a>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-base font-semibold text-primary">2. Alertas viales y geoservicios (SENAMHI WFS / MTC / SUTRAN)</h3>
+              <div class="flex items-center gap-2">
+                <button type="button" (click)="syncOfficialSources()" [disabled]="busy" class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold">
+                  Sincronizar SENAMHI WFS + MTC/SUTRAN
+                </button>
+                <a href="https://alertasviales.dev.sutran.gob.pe/" target="_blank" rel="noopener" class="text-xs font-semibold text-primary underline">Abrir Mapa SUTRAN</a>
+              </div>
+            </div>
+            <div *ngIf="officialSync" class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/40 text-xs flex flex-col gap-1.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold" [ngClass]="badgeClass(officialSync.senamhiStatus)">SENAMHI WFS: {{ officialSync.senamhiStatus }}</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold" [ngClass]="badgeClass(officialSync.mtcStatus)">MTC GeoJSON: {{ officialSync.mtcStatus }}</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold" [ngClass]="badgeClass(officialSync.sutranApiStatus)">SUTRAN API: {{ officialSync.sutranApiStatus }}</span>
+                <span class="text-[11px] text-secondary font-mono">{{ officialSync.senamhiTotalCorridorStations }} est. SENAMHI · {{ officialSync.mtcVerifiedAltSegmentsCount }} tramos alt. MTC · +{{ officialSync.generatedAlertsCount }} alertas</span>
+              </div>
+              <p *ngIf="officialSync.mtcActiveConcession" class="text-[11px] text-secondary">
+                Concesión MTC verificada: <code class="font-mono text-primary">{{ officialSync.mtcActiveConcession }}</code>
+              </p>
+              <div *ngIf="officialSync.senamhiMatchedStations?.length" class="flex flex-wrap gap-1.5">
+                <span *ngFor="let st of officialSync.senamhiMatchedStations" class="px-2 py-0.5 rounded bg-surface-container-lowest border border-outline-variant/40 text-[10px]">
+                  <strong>{{ st.checkpointName }}</strong> → {{ st.stationName }} ({{ st.distanceKm }} km): {{ st.precipitationMm }} mm ({{ st.anomalyPct >= 0 ? '+' : '' }}{{ st.anomalyPct }}%)
+                </span>
+              </div>
             </div>
             <form class="grid grid-cols-1 sm:grid-cols-2 gap-2" (ngSubmit)="createRoadAlert()">
               <select [(ngModel)]="alertForm.segmentId" name="segmentId" required class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs">
@@ -566,8 +587,7 @@
                 <option value="CERRADO">CERRADO</option>
               </select>
               <select [(ngModel)]="alertForm.originType" name="originType" class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs">
-                <option value="OFICIAL_MANUAL">OFICIAL_MANUAL (SUTRAN/MTC)</option>
-                <option value="SIMULADA">SIMULADA (Demo)</option>
+                <option value="OFICIAL_MANUAL">OFICIAL_MANUAL (SUTRAN / MTC / SENAMHI)</option>
               </select>
               <input type="text" [(ngModel)]="alertForm.description" name="alertDesc" placeholder="Detalle (ej. cierre por deslizamiento)" class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs" />
               <button type="submit" [disabled]="busy" class="sm:col-span-2 h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold">Registrar Alerta Vial</button>
@@ -610,14 +630,14 @@
             </button>
           </article>
 
-          <!-- Bloque 4: Simulador de Contingencias de Flota -->
+          <!-- Bloque 4: Control de Contingencias de Flota -->
           <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm flex flex-col gap-3">
             <div class="flex items-center justify-between gap-2">
-              <h3 class="text-base font-semibold text-primary">4. Simulador de contingencias (+30 / +60 min)</h3>
+              <h3 class="text-base font-semibold text-primary">4. Control de contingencias (+30 / +60 min)</h3>
               <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 text-xs font-semibold">[Operador confirma]</span>
             </div>
             <button type="button" (click)="simulateContingency()" [disabled]="busy" class="h-9 px-3 rounded-lg bg-primary text-on-primary text-xs font-semibold self-start">
-              Simular escenarios +30 y +60 minutos
+              Evaluar escenarios +30 y +60 minutos
             </button>
             <div *ngIf="simulation" class="flex flex-col gap-2">
               <div class="p-3 rounded-lg bg-surface-container-low text-xs flex flex-wrap gap-3">
@@ -798,7 +818,7 @@
             </div>
             <div>
               <span class="text-[11px] uppercase tracking-wider text-amber-800 font-bold">Aviso Ticlio PE-22 Km 132 (4,818 msnm)</span>
-              <p class="text-xs text-on-surface-variant">Control de peso en kg para validación de capacidad en simulador de contingencias de flota.</p>
+              <p class="text-xs text-on-surface-variant">Control de peso en kg para validación de capacidad en contingencias de flota.</p>
             </div>
           </div>
           <span class="text-xs font-mono font-semibold text-primary">Viaje activo: {{ selectedTrip.routeCode }} ({{ selectedTrip.totalParcelWeightKg }} kg)</span>

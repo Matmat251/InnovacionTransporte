@@ -11,7 +11,7 @@ def test_health_endpoint() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "UP"
-    assert body["mode"] == "DEMO"
+    assert body["mode"] == "REAL"
     assert body["defaultThresholdMinutes"] == 30
     assert "X-Correlation-Id" in response.headers
 
@@ -40,7 +40,7 @@ def test_prediction_with_complete_weather_returns_demo_probability() -> None:
     assert response.headers["X-Correlation-Id"] == "test-corr-123"
     body = response.json()
     assert body["status"] == "OK"
-    assert body["mode"] == "DEMO"
+    assert body["mode"] == "REAL"
     assert body["calibrated"] is True
     assert 0.0 <= body["delayProbability"] <= 1.0
     assert body["riskLevel"] in {"BAJO", "MEDIO", "ALTO"}

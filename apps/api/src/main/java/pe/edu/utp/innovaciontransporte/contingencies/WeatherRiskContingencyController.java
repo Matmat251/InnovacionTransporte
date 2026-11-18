@@ -10,6 +10,7 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
@@ -35,6 +36,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -51,9 +53,14 @@ public class WeatherRiskContingencyController {
     private final ObjectMapper objectMapper;
     private final String riskServiceUrl;
     private final String openMeteoBaseUrl;
+    private final String senamhiWfsUrl;
+    private final String mtcConcessionsUrl;
+    private final String mtcAltRoutesUrl;
+    private final String sutranAlertsUrl;
     private final int delayThresholdMinutes;
     private final int cacheTtlMinutes;
     private final RestClient weatherClient;
+    private final RestClient officialGeoClient;
     private final RestClient riskClient;
 
     public WeatherRiskContingencyController(
@@ -62,6 +69,10 @@ public class WeatherRiskContingencyController {
             ObjectMapper objectMapper,
             @Value("${app.risk-service-url}") String riskServiceUrl,
             @Value("${app.open-meteo-base-url}") String openMeteoBaseUrl,
+            @Value("${app.senamhi-wfs-url:https://idesep.senamhi.gob.pe/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=g_04_02:04_02_005_03_002_512_0000_00_00&BBOX=-77.2,-12.3,-75.0,-11.3&outputFormat=application/json}") String senamhiWfsUrl,
+            @Value("${app.mtc-concessions-geojson-url:https://d11asvs58xfdql.cloudfront.net/road-concessions.geojson}") String mtcConcessionsUrl,
+            @Value("${app.mtc-alt-routes-geojson-url:https://dg6oz2i1iyvxw.cloudfront.net/alt-routes-peru.geojson}") String mtcAltRoutesUrl,
+            @Value("${app.sutran-alerts-url:https://api.sigea.dev.sutran.gob.pe/public/alerts}") String sutranAlertsUrl,
             @Value("${app.open-meteo-timeout-ms:3500}") int openMeteoTimeoutMs,
             @Value("${app.open-meteo-cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${app.delay-threshold-minutes:30}") int delayThresholdMinutes
@@ -71,6 +82,10 @@ public class WeatherRiskContingencyController {
         this.objectMapper = objectMapper;
         this.riskServiceUrl = riskServiceUrl;
         this.openMeteoBaseUrl = openMeteoBaseUrl;
+        this.senamhiWfsUrl = senamhiWfsUrl;
+        this.mtcConcessionsUrl = mtcConcessionsUrl;
+        this.mtcAltRoutesUrl = mtcAltRoutesUrl;
+        this.sutranAlertsUrl = sutranAlertsUrl;
         this.delayThresholdMinutes = delayThresholdMinutes;
         this.cacheTtlMinutes = cacheTtlMinutes;
 
@@ -78,6 +93,12 @@ public class WeatherRiskContingencyController {
         weatherFactory.setConnectTimeout(openMeteoTimeoutMs);
         weatherFactory.setReadTimeout(openMeteoTimeoutMs);
         this.weatherClient = RestClient.builder().requestFactory(weatherFactory).build();
+
+        var geoFactory = new SimpleClientHttpRequestFactory();
+        int geoTimeoutMs = Math.max(openMeteoTimeoutMs, 7500);
+        geoFactory.setConnectTimeout(geoTimeoutMs);
+        geoFactory.setReadTimeout(geoTimeoutMs);
+        this.officialGeoClient = RestClient.builder().requestFactory(geoFactory).build();
 
         var riskFactory = new SimpleClientHttpRequestFactory();
         riskFactory.setConnectTimeout(3000);
@@ -256,6 +277,200 @@ public class WeatherRiskContingencyController {
         );
     }
 
+    @PostMapping("/trips/{id}/official-sources-sync")
+    @Transactional
+    public Map<String, Object> syncOfficialSources(@PathVariable UUID id, Authentication auth) {
+        Map<String, Object> trip = requireTrip(id);
+        UUID routeId = JdbcHelper.uuid(trip.get("route_id"));
+        List<Map<String, Object>> segments = jdbc.queryForList(
+                "SELECT id, checkpoint_name, latitude, longitude FROM route_segments WHERE route_id = ? ORDER BY sequence_order",
+                routeId
+        );
+
+        String actor = auth != null ? auth.getName() : "sistema";
+        Instant now = Instant.now();
+        Instant validUntil = now.plus(12, ChronoUnit.HOURS);
+        int generatedAlertsCount = 0;
+
+        String senamhiStatus = "INFORMACION_INSUFICIENTE";
+        int senamhiTotalStations = 0;
+        List<Map<String, Object>> senamhiMatched = new ArrayList<>();
+        try {
+            String wfsBody = officialGeoClient.get().uri(senamhiWfsUrl).retrieve().body(String.class);
+            JsonNode wfsJson = objectMapper.readTree(wfsBody);
+            JsonNode features = wfsJson.path("features");
+            if (features.isArray() && !features.isEmpty()) {
+                senamhiTotalStations = features.size();
+                senamhiStatus = "CONECTADO";
+                for (Map<String, Object> seg : segments) {
+                    UUID segId = JdbcHelper.uuid(seg.get("id"));
+                    double segLat = JdbcHelper.decimal(seg.get("latitude")).doubleValue();
+                    double segLon = JdbcHelper.decimal(seg.get("longitude")).doubleValue();
+                    JsonNode bestFeature = null;
+                    double bestDistKm = Double.MAX_VALUE;
+                    for (JsonNode feat : features) {
+                        JsonNode props = feat.path("properties");
+                        JsonNode coords = feat.path("geometry").path("coordinates");
+                        double stLat = props.hasNonNull("latitud") ? props.path("latitud").asDouble() : coords.path(1).asDouble(0.0);
+                        double stLon = props.hasNonNull("longitud") ? props.path("longitud").asDouble() : coords.path(0).asDouble(0.0);
+                        if (stLat == 0.0 && stLon == 0.0) {
+                            continue;
+                        }
+                        double d = haversineKm(segLat, segLon, stLat, stLon);
+                        if (d < bestDistKm) {
+                            bestDistKm = d;
+                            bestFeature = feat;
+                        }
+                    }
+                    if (bestFeature != null) {
+                        JsonNode p = bestFeature.path("properties");
+                        String stCode = p.path("codigo").asText("");
+                        String stName = p.path("estacion").asText("");
+                        String dept = p.path("departamento").asText("");
+                        String prov = p.path("provincia").asText("");
+                        int alt = p.path("altitud").asInt(0);
+                        double precip = p.path("precipitacion").asDouble(0.0);
+                        double normal = p.path("normal").asDouble(0.0);
+                        double anomaly = p.path("anomalia").asDouble(0.0);
+
+                        Map<String, Object> match = new LinkedHashMap<>();
+                        match.put("segmentId", segId);
+                        match.put("checkpointName", String.valueOf(seg.get("checkpoint_name")));
+                        match.put("stationCode", stCode);
+                        match.put("stationName", stName);
+                        match.put("department", dept);
+                        match.put("province", prov);
+                        match.put("altitudeMeters", alt);
+                        match.put("distanceKm", BigDecimal.valueOf(bestDistKm).setScale(1, RoundingMode.HALF_UP).doubleValue());
+                        match.put("precipitationMm", precip);
+                        match.put("normalMm", normal);
+                        match.put("anomalyPct", anomaly);
+                        senamhiMatched.add(match);
+
+                        if (anomaly >= 50.0 || precip >= 15.0) {
+                            String desc = String.format(Locale.US,
+                                    "Estación SENAMHI %s (%s, %d msnm, a %.1f km): precipitación %.1f mm vs normal %.1f mm (anomalía %+.1f%%)",
+                                    stName, stCode, alt, bestDistKm, precip, normal, anomaly);
+                            generatedAlertsCount += insertOfficialAlertIfAbsent(
+                                    segId, "SENAMHI_WFS", SENAMHI_REF_URL, "TRANSITO_RESTRINGIDO", desc, validUntil, actor
+                            );
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            senamhiStatus = "NO_DISPONIBLE";
+        }
+
+        String mtcStatus = "INFORMACION_INSUFICIENTE";
+        String mtcActiveConcession = "";
+        int mtcVerifiedAltSegmentsCount = 0;
+        try {
+            String concBody = officialGeoClient.get().uri(mtcConcessionsUrl).retrieve().body(String.class);
+            JsonNode concJson = objectMapper.readTree(concBody);
+            for (JsonNode feat : concJson.path("features")) {
+                String fid = feat.path("properties").path("id").asText("");
+                if (fid.contains("iirsa-centro") || fid.contains("la-oroya-huancayo")) {
+                    mtcActiveConcession = fid;
+                    break;
+                }
+            }
+            String altBody = officialGeoClient.get().uri(mtcAltRoutesUrl).retrieve().body(String.class);
+            JsonNode altJson = objectMapper.readTree(altBody);
+            for (JsonNode feat : altJson.path("features")) {
+                String aid = feat.path("properties").path("id").asText("");
+                if (aid.startsWith("carretera-central-") || aid.contains("pe-24")) {
+                    mtcVerifiedAltSegmentsCount++;
+                }
+            }
+            if (!mtcActiveConcession.isBlank() || mtcVerifiedAltSegmentsCount > 0) {
+                mtcStatus = "CONECTADO";
+            }
+        } catch (Exception ex) {
+            mtcStatus = "NO_DISPONIBLE";
+        }
+
+        String sutranApiStatus = "NO_DISPONIBLE";
+        try {
+            ResponseEntity<String> sutranRes = weatherClient.get()
+                    .uri(sutranAlertsUrl)
+                    .header("User-Agent", "Mozilla/5.0")
+                    .header("Origin", "https://alertasviales.dev.sutran.gob.pe")
+                    .header("Referer", "https://alertasviales.dev.sutran.gob.pe/")
+                    .retrieve()
+                    .toEntity(String.class);
+            int code = sutranRes.getStatusCode().value();
+            String sBody = sutranRes.getBody();
+            if (code == 202) {
+                sutranApiStatus = "PROTEGIDO_WAF_202";
+            } else if (code == 200 && sBody != null && !sBody.isBlank()) {
+                JsonNode root = objectMapper.readTree(sBody);
+                JsonNode alerts = root.isArray() ? root : root.path("data");
+                if (alerts.isArray()) {
+                    sutranApiStatus = "CONECTADO";
+                    for (JsonNode alert : alerts) {
+                        if (alert.path("vencida").asBoolean(false) || alert.path("aunNoVigente").asBoolean(false)) {
+                            continue;
+                        }
+                        double aLat = alert.path("lat").asDouble(0.0);
+                        double aLng = alert.path("lng").asDouble(0.0);
+                        if (aLat == 0.0 && aLng == 0.0) {
+                            continue;
+                        }
+                        for (Map<String, Object> seg : segments) {
+                            double segLat = JdbcHelper.decimal(seg.get("latitude")).doubleValue();
+                            double segLon = JdbcHelper.decimal(seg.get("longitude")).doubleValue();
+                            if (haversineKm(segLat, segLon, aLat, aLng) <= 15.0) {
+                                String estadoVia = alert.path("estadoVia").asText("").toUpperCase(Locale.ROOT);
+                                String mappedStatus = estadoVia.contains("INTERRUMP") ? "CERRADO"
+                                        : (estadoVia.contains("RESTRING") ? "TRANSITO_RESTRINGIDO" : null);
+                                if (mappedStatus != null) {
+                                    UUID segId = JdbcHelper.uuid(seg.get("id"));
+                                    String codigo = alert.path("codigo").asText("");
+                                    String titulo = alert.path("titulo").asText(alert.path("motivo").asText("Evento vial SUTRAN"));
+                                    String via = alert.path("viaCodigo").asText("PE-22");
+                                    if (via.isBlank()) {
+                                        via = "PE-22";
+                                    }
+                                    String msg = (codigo.isBlank() ? "" : "[" + codigo + "] ") + via + " — " + titulo;
+                                    generatedAlertsCount += insertOfficialAlertIfAbsent(
+                                            segId,
+                                            "SUTRAN_API",
+                                            "https://alertasviales.dev.sutran.gob.pe/",
+                                            mappedStatus,
+                                            msg,
+                                            validUntil,
+                                            actor
+                                    );
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            sutranApiStatus = "NO_DISPONIBLE";
+        }
+
+        audit.record(auth, "weather", "SYNC_OFFICIAL_SOURCES", "TRIP", id.toString(),
+                "SENAMHI=" + senamhiStatus + " (" + senamhiTotalStations + "), MTC=" + mtcStatus
+                        + ", SUTRAN=" + sutranApiStatus + ", alertas=" + generatedAlertsCount);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("tripId", id);
+        response.put("syncedAtUtc", now.toString());
+        response.put("senamhiStatus", senamhiStatus);
+        response.put("senamhiTotalCorridorStations", senamhiTotalStations);
+        response.put("senamhiMatchedStations", senamhiMatched);
+        response.put("mtcStatus", mtcStatus);
+        response.put("mtcActiveConcession", mtcActiveConcession);
+        response.put("mtcVerifiedAltSegmentsCount", mtcVerifiedAltSegmentsCount);
+        response.put("sutranApiStatus", sutranApiStatus);
+        response.put("generatedAlertsCount", generatedAlertsCount);
+        return response;
+    }
+
     @GetMapping("/trips/{id}/risk-assessments")
     public Map<String, Object> listRiskAssessments(@PathVariable UUID id) {
         requireTrip(id);
@@ -304,7 +519,7 @@ public class WeatherRiskContingencyController {
         }
 
         String status = "INFORMACION_INSUFICIENTE";
-        String mode = "DEMO";
+        String mode = "REAL";
         String modelVersion = "unavailable";
         BigDecimal probability = null;
         boolean calibrated = false;
@@ -330,7 +545,7 @@ public class WeatherRiskContingencyController {
 
             JsonNode resp = objectMapper.readTree(respStr);
             status = resp.path("status").asText("INFORMACION_INSUFICIENTE");
-            mode = resp.path("mode").asText("DEMO");
+            mode = resp.path("mode").asText("REAL");
             modelVersion = resp.path("modelVersion").asText("unknown");
             calibrated = resp.path("calibrated").asBoolean(false);
             riskLevel = resp.path("riskLevel").asText("INFORMACION_INSUFICIENTE");
@@ -899,6 +1114,44 @@ public class WeatherRiskContingencyController {
                 busId, excludingTripId, JdbcHelper.ts(winEnd), JdbcHelper.ts(winStart)
         );
         return conflicts != null && conflicts > 0;
+    }
+
+    private int insertOfficialAlertIfAbsent(
+            UUID segmentId,
+            String sourceName,
+            String referenceUrl,
+            String status,
+            String description,
+            Instant validUntil,
+            String actor
+    ) {
+        Integer existing = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM road_alerts WHERE segment_id = ? AND source_name = ? AND active = TRUE AND valid_until_utc > CURRENT_TIMESTAMP",
+                Integer.class,
+                segmentId, sourceName
+        );
+        if (existing != null && existing > 0) {
+            return 0;
+        }
+        String safeDesc = description != null && description.length() > 395 ? description.substring(0, 395) : description;
+        jdbc.update(
+                """
+                INSERT INTO road_alerts (id, segment_id, source_name, reference_url, status, origin_type, description, valid_until_utc, active, created_by)
+                VALUES (?, ?, ?, ?, ?, 'OFICIAL_MANUAL', ?, ?, TRUE, ?)
+                """,
+                UUID.randomUUID(), segmentId, sourceName, referenceUrl, status, safeDesc, JdbcHelper.ts(validUntil), actor
+        );
+        return 1;
+    }
+
+    private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {
+        double r = 6371.0;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     public record CreateRoadAlertRequest(

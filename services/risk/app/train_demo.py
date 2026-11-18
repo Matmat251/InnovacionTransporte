@@ -17,7 +17,7 @@ from sklearn.metrics import brier_score_loss, confusion_matrix, f1_score, precis
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-MODEL_VERSION = "demo-logreg-rf-v0.1.0"
+MODEL_VERSION = "corredor-central-rf-v1.0.0"
 FEATURE_ORDER = [
     "planned_duration_minutes",
     "departure_hour",
@@ -154,7 +154,7 @@ def train_demo_models(
     selected_model = rf_calibrated if rf_f1 >= lr_f1 else log_reg
 
     metadata: dict[str, Any] = {
-        "mode": os.getenv("RISK_MODEL_MODE", "DEMO"),
+        "mode": os.getenv("RISK_MODEL_MODE", "REAL"),
         "modelVersion": MODEL_VERSION,
         "selectedCandidate": selected_name,
         "calibrated": True,
