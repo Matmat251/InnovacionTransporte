@@ -5,22 +5,25 @@ import test from 'node:test';
 
 const webRoot = path.resolve(import.meta.dirname, '..');
 
-test('portal incluye etiquetas requeridas en español y los 4 bloques operativos completos', () => {
-  const source = fs.readFileSync(path.join(webRoot, 'src/app/app.component.ts'), 'utf8');
-  assert.match(source, /Demo/);
-  assert.match(source, /Información insuficiente/);
-  assert.match(source, /Por verificar/);
-  assert.match(source, /America\/Lima/);
-  assert.match(source, /1\. Pronóstico por tramo/);
-  assert.match(source, /2\. Alertas viales/);
-  assert.match(source, /3\. Riesgo experimental/);
-  assert.match(source, /4\. Simulador de contingencias/);
-  assert.match(source, /Plano de asientos/);
-  assert.match(source, /Historial de encomiendas/);
-  assert.match(source, /Idempotency-Key/);
-  assert.match(source, /RECIBIDA/);
-  assert.match(source, /EN_TRANSPORTE/);
-  assert.match(source, /ENTREGADA/);
+test('portal aplica diseño Stitch AndesRoute Central con etiquetas y 4 bloques operativos', () => {
+  const html = fs.readFileSync(path.join(webRoot, 'src/app/app.component.html'), 'utf8');
+  const ts = fs.readFileSync(path.join(webRoot, 'src/app/app.component.ts'), 'utf8');
+  assert.match(html, /AndesRoute/);
+  assert.match(html, /PE-22/);
+  assert.match(html, /Demo/);
+  assert.match(html, /Información insuficiente/);
+  assert.match(html, /Por verificar/);
+  assert.match(ts, /America\/Lima/);
+  assert.match(html, /1\. Pronóstico por tramo/);
+  assert.match(html, /2\. Alertas viales/);
+  assert.match(html, /3\. Riesgo experimental/);
+  assert.match(html, /4\. Simulador de contingencias/);
+  assert.match(html, /Distribución de Cabina/);
+  assert.match(html, /ANDESROUTE CARGO/);
+  assert.match(html, /RECIBIDA/);
+  assert.match(html, /EN_TRANSPORTE/);
+  assert.match(html, /ENTREGADA/);
+  assert.match(html, /Idempotency-Key/);
 });
 
 test('proxy y nginx reenvían /api/v1 hacia el backend del mismo origen', () => {
@@ -31,9 +34,11 @@ test('proxy y nginx reenvían /api/v1 hacia el backend del mismo origen', () => 
   assert.match(nginxConf, /location = \/healthz/);
 });
 
-test('compilación Angular genera dist/web/browser/index.html', () => {
+test('compilación Angular genera dist/web/browser/index.html con tokens Tailwind de Stitch', () => {
   const indexPath = path.join(webRoot, 'dist/web/browser/index.html');
   assert.equal(fs.existsSync(indexPath), true, 'Ejecuta npm run build antes de npm test');
   const html = fs.readFileSync(indexPath, 'utf8');
   assert.match(html, /lang="es"/);
+  assert.match(html, /AndesRoute Central/);
+  assert.match(html, /tailwind\.config/);
 });
