@@ -80,3 +80,9 @@ npm run lint
 npm run build
 npm test
 ```
+
+## Usuarios de Prueba y Escenario Semilla (`V2`)
+
+- **Operador**: usuario `operador.hyo` / contraseña `Demo2026!` (rol `OPERADOR`)
+- **Administrador**: usuario `admin` / contraseña `Demo2026!` (rol `ADMIN`)
+- **Escenario semilla**: Viaje `LIM-HYO-01` llega a Huancayo a las `15:40` (preparación `20 min`) y encadena con `HYO-LIM-01` a las `16:15` (24 pasajes vendidos y 8 encomiendas de `18.5 kg`); flota incluye `C4R-902` (36 asientos, viable) y `C4R-903` (20 asientos, rechazado por capacidad).
