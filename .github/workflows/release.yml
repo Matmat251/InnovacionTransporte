@@ -1,0 +1,92 @@
+name: Release de Imágenes y Manifiesto
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-main:
+    name: Validar código integrado antes de empaquetar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar Compose y migraciones
+        run: |
+          docker compose -f compose.yaml --env-file .env.example config -q
+          ls -1 apps/api/src/main/resources/db/migration/V*.sql
+
+  publish-images:
+    name: Construir y publicar artefactos en GHCR
+    needs: validate-main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Autenticar en GHCR con GITHUB_TOKEN
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extraer metadatos y etiqueta de versión
+        id: meta
+        run: |
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            TAG="sha-${GITHUB_SHA::7}"
+          fi
+          echo "owner=$OWNER_LOWER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Construir y publicar web
+        id: web
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/web
+          push: ${{ github.event_name == 'push' }}
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/innovacion-transporte-web:${{ steps.meta.outputs.tag }}
+      - name: Construir y publicar api
+        id: api
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/api
+          push: ${{ github.event_name == 'push' }}
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/innovacion-transporte-api:${{ steps.meta.outputs.tag }}
+      - name: Construir y publicar risk
+        id: risk
+        uses: docker/build-push-action@v6
+        with:
+          context: ./services/risk
+          push: ${{ github.event_name == 'push' }}
+          tags: ghcr.io/${{ steps.meta.outputs.owner }}/innovacion-transporte-risk:${{ steps.meta.outputs.tag }}
+      - name: Registrar manifiesto auditable (commit, digests, modelo, esquema)
+        run: |
+          SCHEMA_VER=$(ls -1 apps/api/src/main/resources/db/migration/V*.sql | sort | tail -n 1 | xargs basename)
+          MODEL_VER=$(grep -oE 'MODEL_VERSION = "[^"]+"' services/risk/app/train_demo.py | cut -d'"' -f2)
+          cat <<EOF > release-manifest.json
+          {
+            "commit": "${{ github.sha }}",
+            "tag": "${{ steps.meta.outputs.tag }}",
+            "flywaySchema": "${SCHEMA_VER}",
+            "riskModelVersion": "${MODEL_VER}",
+            "digests": {
+              "web": "${{ steps.web.outputs.digest }}",
+              "api": "${{ steps.api.outputs.digest }}",
+              "risk": "${{ steps.risk.outputs.digest }}"
+            }
+          }
+          EOF
+          cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-${{ steps.meta.outputs.tag }}
+          path: release-manifest.json

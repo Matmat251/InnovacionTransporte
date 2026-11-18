@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: innovacion-transporte-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/transporte_central}
+    username: ${SPRING_DATASOURCE_USERNAME:transporte_app}
+    password: ${SPRING_DATASOURCE_PASSWORD:changeme_local_only}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8080
+  forward-headers-strategy: native
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+        secure: ${APP_COOKIE_SECURE:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+app:
+  corridor: Lima-Huancayo
+  company: Expreso Corredor Central S.A.C.
+  timezone: ${APP_TIMEZONE:America/Lima}
+  currency: ${APP_CURRENCY:PEN}
+  delay-threshold-minutes: ${APP_DELAY_THRESHOLD_MINUTES:30}
+  risk-service-url: ${RISK_SERVICE_URL:http://localhost:8000}

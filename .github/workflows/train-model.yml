@@ -1,0 +1,71 @@
+name: Entrenamiento Manual del Modelo de Riesgo
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_mode:
+        description: Modo reproducible del conjunto de datos
+        required: true
+        default: DEMO
+        type: choice
+        options:
+          - DEMO
+          - REAL
+      random_seed:
+        description: Semilla determinista para reproducción
+        required: true
+        default: '42'
+        type: string
+      delay_threshold_minutes:
+        description: Umbral de retraso en minutos
+        required: true
+        default: '30'
+        type: string
+      dataset_reference:
+        description: Referencia o checksum del dataset autorizado (requerido en modo REAL)
+        required: false
+        default: synthetic-demo-seed-42
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  train-candidate:
+    name: Entrenar candidato y generar informe
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/risk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias fijadas
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Validar origen autorizado de datos
+        run: |
+          if [[ "${{ inputs.dataset_mode }}" == "REAL" ]]; then
+            echo "ERROR: El modo REAL requiere un dataset anonimizado y autorizado en entorno controlado fuera del repositorio público."
+            exit 1
+          fi
+      - name: Ejecutar entrenamiento reproducible y pruebas
+        env:
+          RISK_MODEL_MODE: ${{ inputs.dataset_mode }}
+          RISK_RANDOM_SEED: ${{ inputs.random_seed }}
+          APP_DELAY_THRESHOLD_MINUTES: ${{ inputs.delay_threshold_minutes }}
+        run: |
+          pytest -v
+          python -m app.train_demo
+          echo "Commit de entrenamiento: ${{ github.sha }}" >> artifacts/training_summary.txt
+          echo "Dataset ref: ${{ inputs.dataset_reference }}" >> artifacts/training_summary.txt
+          cat artifacts/model_metadata.json
+      - name: Publicar modelo candidato e informe (requiere revisión antes de promover)
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-candidate-report-${{ inputs.dataset_mode }}-seed-${{ inputs.random_seed }}
+          path: |
+            services/risk/artifacts/model_metadata.json
+            services/risk/artifacts/demo_model.joblib
+            services/risk/artifacts/training_summary.txt

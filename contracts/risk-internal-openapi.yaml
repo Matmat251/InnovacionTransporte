@@ -1,0 +1,172 @@
+openapi: 3.1.0
+info:
+  title: API Interna de Riesgo de Retraso - Expreso Corredor Central
+  version: 0.1.0
+  description: >
+    Contrato interno entre Spring Boot y el servicio FastAPI scikit-learn.
+    Acepta únicamente variables previas a la salida. No recibe PII ni tiempos reales post-viaje.
+servers:
+  - url: http://risk:8000
+    description: Red interna de Docker Compose
+paths:
+  /health:
+    get:
+      summary: Salud del servicio de inferencia y metadatos del modelo cargado
+      responses:
+        "200":
+          description: Servicio operativo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: UP
+                service: risk-inference
+                mode: DEMO
+                modelVersion: demo-logreg-rf-v0.1.0
+                defaultThresholdMinutes: 30
+
+  /internal/v1/predictions:
+    post:
+      summary: Estimar riesgo experimental de retraso >= umbral configurado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PredictionRequest"
+            examples:
+              conPronostico:
+                summary: Viaje Lima-Huancayo con pronóstico previo completo
+                value:
+                  routeCode: LIM-HYO-01
+                  scheduledDepartureUtc: "2026-11-20T12:30:00Z"
+                  plannedDurationMinutes: 480
+                  delayThresholdMinutes: 30
+                  weatherSummary:
+                    maxPrecipitationMm: 4.8
+                    maxPrecipitationProbabilityPct: 80
+                    minTemperatureC: 3.5
+                    maxWindKmh: 34.0
+                    minVisibilityMeters: 4200
+                    worstWeatherCode: 63
+                    coverageRatio: 1.0
+              sinPronosticoSuficiente:
+                summary: Pronóstico incompleto o ausente
+                value:
+                  routeCode: LIM-HYO-01
+                  scheduledDepartureUtc: "2026-11-20T12:30:00Z"
+                  plannedDurationMinutes: 480
+                  delayThresholdMinutes: 30
+                  weatherSummary: null
+      responses:
+        "200":
+          description: Resultado versionado de inferencia
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionResponse"
+              examples:
+                demoOk:
+                  value:
+                    status: OK
+                    mode: DEMO
+                    modelVersion: demo-logreg-rf-v0.1.0
+                    thresholdMinutes: 30
+                    delayProbability: 0.68
+                    calibrated: true
+                    riskLevel: ALTO
+                    missingFeatures: []
+                    latencyMs: 3.2
+                    evaluatedAtUtc: "2026-11-20T11:00:00Z"
+                datosInsuficientes:
+                  value:
+                    status: INFORMACION_INSUFICIENTE
+                    mode: DEMO
+                    modelVersion: demo-logreg-rf-v0.1.0
+                    thresholdMinutes: 30
+                    delayProbability: null
+                    calibrated: false
+                    riskLevel: INFORMACION_INSUFICIENTE
+                    missingFeatures: [weatherSummary]
+                    latencyMs: 0.8
+                    evaluatedAtUtc: "2026-11-20T11:00:00Z"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, mode, modelVersion, defaultThresholdMinutes]
+      properties:
+        status: { type: string }
+        service: { type: string }
+        mode: { type: string, enum: [DEMO, REAL] }
+        modelVersion: { type: string }
+        defaultThresholdMinutes: { type: integer }
+
+    WeatherSummary:
+      type: object
+      required:
+        - maxPrecipitationMm
+        - maxPrecipitationProbabilityPct
+        - minTemperatureC
+        - maxWindKmh
+        - minVisibilityMeters
+        - worstWeatherCode
+        - coverageRatio
+      properties:
+        maxPrecipitationMm: { type: number, minimum: 0 }
+        maxPrecipitationProbabilityPct: { type: number, minimum: 0, maximum: 100 }
+        minTemperatureC: { type: number }
+        maxWindKmh: { type: number, minimum: 0 }
+        minVisibilityMeters: { type: number, minimum: 0 }
+        worstWeatherCode: { type: integer }
+        coverageRatio: { type: number, minimum: 0, maximum: 1 }
+
+    PredictionRequest:
+      type: object
+      required: [routeCode, scheduledDepartureUtc, plannedDurationMinutes, delayThresholdMinutes]
+      properties:
+        routeCode: { type: string }
+        scheduledDepartureUtc: { type: string, format: date-time }
+        plannedDurationMinutes: { type: integer, minimum: 30 }
+        delayThresholdMinutes: { type: integer, minimum: 10, default: 30 }
+        weatherSummary:
+          anyOf:
+            - $ref: "#/components/schemas/WeatherSummary"
+            - type: "null"
+
+    PredictionResponse:
+      type: object
+      required:
+        - status
+        - mode
+        - modelVersion
+        - thresholdMinutes
+        - calibrated
+        - riskLevel
+        - missingFeatures
+        - latencyMs
+        - evaluatedAtUtc
+      properties:
+        status:
+          type: string
+          enum: [OK, INFORMACION_INSUFICIENTE]
+        mode:
+          type: string
+          enum: [DEMO, REAL]
+        modelVersion: { type: string }
+        thresholdMinutes: { type: integer }
+        delayProbability:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+        calibrated: { type: boolean }
+        riskLevel:
+          type: string
+          enum: [BAJO, MEDIO, ALTO, INFORMACION_INSUFICIENTE]
+        missingFeatures:
+          type: array
+          items: { type: string }
+        latencyMs: { type: number }
+        evaluatedAtUtc: { type: string, format: date-time }

@@ -1,0 +1,126 @@
+name: CI de PR y Ramas
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - 'chore/**'
+      - 'feat/**'
+      - 'fix/**'
+
+permissions:
+  contents: read
+
+jobs:
+  contracts-and-compose:
+    name: Validar contratos OpenAPI y Compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar PyYAML y validar contratos OpenAPI
+        run: |
+          pip install --no-cache-dir pyyaml==6.0.2
+          python -c "import yaml, glob; [yaml.safe_load(open(f, encoding='utf-8')) for f in glob.glob('contracts/*.yaml')]; print('Contratos YAML válidos')"
+      - name: Validar configuración de Docker Compose
+        run: docker compose -f compose.yaml --env-file .env.example config -q
+
+  risk-test:
+    name: Pruebas FastAPI y entrenamiento demo
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/risk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias fijadas
+        run: pip install --no-cache-dir -r requirements.txt
+      - name: Ejecutar pruebas unitarias e integración FastAPI
+        run: pytest -v
+      - name: Verificar entrenamiento reproducible DEMO
+        run: |
+          RISK_RANDOM_SEED=42 APP_DELAY_THRESHOLD_MINUTES=30 python -m app.train_demo
+          test -f artifacts/model_metadata.json
+
+  api-test:
+    name: Pruebas Spring Boot y Flyway contra PostgreSQL real
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_DB: transporte_central
+          POSTGRES_USER: transporte_app
+          POSTGRES_PASSWORD: changeme_local_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U transporte_app -d transporte_central"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: apps/api/pom.xml
+      - name: Compilar y probar contra PostgreSQL 16 real
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/transporte_central
+          SPRING_DATASOURCE_USERNAME: transporte_app
+          SPRING_DATASOURCE_PASSWORD: changeme_local_only
+          SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+        run: |
+          chmod +x mvnw
+          ./mvnw -B verify
+
+  web-test:
+    name: Compilación y pruebas Angular
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Instalar dependencias fijadas
+        run: npm ci
+      - name: Verificar tipado TypeScript
+        run: npm run lint
+      - name: Compilar aplicación Angular
+        run: npm run build
+      - name: Ejecutar pruebas web
+        run: npm test
+
+  compose-smoke:
+    name: Smoke test integrado en Docker Compose
+    needs: [contracts-and-compose, risk-test, api-test, web-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Levantar stack completo con healthchecks
+        run: docker compose -f compose.yaml --env-file .env.example up -d --build --wait
+      - name: Verificar proxy de mismo origen, salud y semilla Flyway
+        run: |
+          curl -fsS http://127.0.0.1:8080/healthz | grep -q 'ok'
+          curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'
+          curl -fsS http://127.0.0.1:8080/api/v1/system/info | grep -q 'Lima-Huancayo'
+      - name: Limpiar contenedores y volúmenes
+        if: always()
+        run: docker compose -f compose.yaml --env-file .env.example down -v

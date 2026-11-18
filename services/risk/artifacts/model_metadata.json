@@ -1,0 +1,90 @@
+{
+  "mode": "DEMO",
+  "modelVersion": "demo-logreg-rf-v0.1.0",
+  "selectedCandidate": "randomForestCalibrated",
+  "calibrated": true,
+  "routeScope": [
+    "LIM-HYO-01"
+  ],
+  "delayThresholdMinutes": 30,
+  "randomSeed": 42,
+  "featureSchema": [
+    "planned_duration_minutes",
+    "departure_hour",
+    "day_of_week",
+    "max_precipitation_mm",
+    "max_precipitation_prob_pct",
+    "min_temperature_c",
+    "max_wind_kmh",
+    "min_visibility_m"
+  ],
+  "datasetSha256": "59acadb830a69a3d1b435629f4f59328bb0bbcb3552fbb3d84284633b6faeecf",
+  "sampleCounts": {
+    "total": 360,
+    "train": 270,
+    "test": 90,
+    "trainPositiveRate": 0.4148,
+    "testPositiveRate": 0.2778
+  },
+  "temporalSplit": {
+    "trainPeriodUtc": [
+      "2026-01-01T06:00:00+00:00",
+      "2026-05-15T18:00:00+00:00"
+    ],
+    "testPeriodUtc": [
+      "2026-05-16T06:00:00+00:00",
+      "2026-06-29T18:00:00+00:00"
+    ]
+  },
+  "metrics": {
+    "dummyBaseline": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "brierScore": 0.2778,
+      "confusionMatrix": [
+        [
+          65,
+          0
+        ],
+        [
+          25,
+          0
+        ]
+      ]
+    },
+    "logisticRegression": {
+      "precision": 0.8182,
+      "recall": 0.36,
+      "f1": 0.5,
+      "brierScore": 0.1309,
+      "confusionMatrix": [
+        [
+          63,
+          2
+        ],
+        [
+          16,
+          9
+        ]
+      ]
+    },
+    "randomForestCalibrated": {
+      "precision": 0.9167,
+      "recall": 0.44,
+      "f1": 0.5946,
+      "brierScore": 0.1383,
+      "confusionMatrix": [
+        [
+          64,
+          1
+        ],
+        [
+          14,
+          11
+        ]
+      ]
+    }
+  },
+  "trainedAtUtc": "2026-11-18T18:24:25.090575+00:00"
+}
