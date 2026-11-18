@@ -5,18 +5,22 @@ import test from 'node:test';
 
 const webRoot = path.resolve(import.meta.dirname, '..');
 
-test('portal incluye etiquetas requeridas en español y bloques base', () => {
+test('portal incluye etiquetas requeridas en español y los 4 bloques operativos completos', () => {
   const source = fs.readFileSync(path.join(webRoot, 'src/app/app.component.ts'), 'utf8');
   assert.match(source, /Demo/);
   assert.match(source, /Información insuficiente/);
   assert.match(source, /Por verificar/);
   assert.match(source, /America\/Lima/);
-  assert.match(source, /Pronóstico por tramo/);
-  assert.match(source, /Alertas viales/);
-  assert.match(source, /Riesgo experimental/);
-  assert.match(source, /Contingencias de flota/);
+  assert.match(source, /1\. Pronóstico por tramo/);
+  assert.match(source, /2\. Alertas viales/);
+  assert.match(source, /3\. Riesgo experimental/);
+  assert.match(source, /4\. Simulador de contingencias/);
   assert.match(source, /Plano de asientos/);
   assert.match(source, /Historial de encomiendas/);
+  assert.match(source, /Idempotency-Key/);
+  assert.match(source, /RECIBIDA/);
+  assert.match(source, /EN_TRANSPORTE/);
+  assert.match(source, /ENTREGADA/);
 });
 
 test('proxy y nginx reenvían /api/v1 hacia el backend del mismo origen', () => {

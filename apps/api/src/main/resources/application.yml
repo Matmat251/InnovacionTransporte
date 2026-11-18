@@ -43,3 +43,6 @@ app:
   currency: ${APP_CURRENCY:PEN}
   delay-threshold-minutes: ${APP_DELAY_THRESHOLD_MINUTES:30}
   risk-service-url: ${RISK_SERVICE_URL:http://localhost:8000}
+  open-meteo-base-url: ${OPEN_METEO_BASE_URL:https://api.open-meteo.com/v1/forecast}
+  open-meteo-timeout-ms: ${OPEN_METEO_TIMEOUT_MS:3500}
+  open-meteo-cache-ttl-minutes: ${OPEN_METEO_CACHE_TTL_MINUTES:30}
