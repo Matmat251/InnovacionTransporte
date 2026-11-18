@@ -707,15 +707,15 @@
                   type="button"
                   *ngFor="let seat of seats"
                   (click)="selectSeat(seat)"
-                  [disabled]="seat.status !== 'DISPONIBLE'"
+                  [disabled]="seat.status !== 'DISPONIBLE' && !seat.activeTicketId"
                   [class]="seat.status !== 'DISPONIBLE'
-                    ? 'h-12 rounded-lg bg-surface-variant text-secondary opacity-55 cursor-not-allowed flex flex-col items-center justify-center text-xs font-bold'
+                    ? 'h-12 rounded-lg bg-surface-variant text-secondary hover:bg-surface-container-high cursor-pointer flex flex-col items-center justify-center text-xs font-bold'
                     : (saleForm.seatNumber === seat.seatNumber
                         ? 'h-12 rounded-lg bg-primary text-on-primary ring-2 ring-primary ring-offset-1 flex flex-col items-center justify-center text-xs font-bold shadow'
                         : 'h-12 rounded-lg bg-surface-container-lowest hover:bg-surface-container border border-outline-variant/50 text-primary flex flex-col items-center justify-center text-xs font-bold')"
                 >
                   <span>#{{ seat.seatNumber }}</span>
-                  <span class="text-[9px] font-normal">{{ seat.status === 'DISPONIBLE' ? 'Libre' : 'Vendido' }}</span>
+                  <span class="text-[9px] font-normal">{{ seat.status === 'DISPONIBLE' ? 'Libre' : 'Ver boleto' }}</span>
                 </button>
               </div>
             </div>
@@ -764,6 +764,24 @@
                 Anular venta y liberar asiento
               </button>
             </div>
+          </article>
+
+          <article class="bg-surface-container-lowest rounded-xl p-space-md border border-outline-variant/40 shadow-sm flex flex-col gap-2">
+            <h3 class="text-sm font-semibold text-primary">Registrar Nuevo Pasajero</h3>
+            <form class="flex flex-col gap-2" (ngSubmit)="createPassenger()">
+              <div class="grid grid-cols-3 gap-2">
+                <select [(ngModel)]="passengerForm.documentType" name="docType" class="h-9 px-2 rounded-lg bg-surface-container-low text-xs">
+                  <option value="DNI">DNI</option>
+                  <option value="CE">CE</option>
+                  <option value="PASAPORTE">PASAPORTE</option>
+                </select>
+                <input type="text" [(ngModel)]="passengerForm.documentNumber" name="docNum" placeholder="N° documento" required class="col-span-2 h-9 px-2.5 rounded-lg bg-surface-container-low text-xs font-mono" />
+              </div>
+              <input type="text" [(ngModel)]="passengerForm.fullName" name="passFullName" placeholder="Nombre completo (ficticio)" required class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs" />
+              <button type="submit" [disabled]="busy" class="h-9 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold">
+                Guardar pasajero
+              </button>
+            </form>
           </article>
         </aside>
       </section>
@@ -938,6 +956,57 @@
             </form>
           </article>
         </div>
+
+        <!-- Exclusivo ADMIN: Alta de Flota y Programación de Viajes -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
+          <article *ngIf="isAdmin" class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-base font-semibold text-primary">Registrar Bus en Flota</h2>
+              <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 text-[10px] font-bold">[Solo ADMIN]</span>
+            </div>
+            <form class="grid grid-cols-2 gap-2" (ngSubmit)="createBus()">
+              <input type="text" [(ngModel)]="busForm.plate" name="busPlate" placeholder="Placa (ej. D5T-888)" required class="h-9 px-3 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <input type="text" [(ngModel)]="busForm.model" name="busModel" placeholder="Modelo" required class="h-9 px-3 rounded-lg bg-surface-container-low text-xs" />
+              <input type="number" [(ngModel)]="busForm.seatCapacity" name="busSeats" placeholder="Asientos" required class="h-9 px-3 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <input type="number" [(ngModel)]="busForm.cargoCapacityKg" name="busCargo" placeholder="Carga kg" required class="h-9 px-3 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <select [(ngModel)]="busForm.homeTerminalCode" name="busTerminal" class="col-span-2 h-9 px-3 rounded-lg bg-surface-container-low text-xs">
+                <option value="LIM-YERB">Terminal Yerbateros (LIM-YERB)</option>
+                <option value="HYO-TERM">Terminal Huancayo (HYO-TERM)</option>
+              </select>
+              <button type="submit" [disabled]="busy" class="col-span-2 h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold">Registrar Bus</button>
+            </form>
+          </article>
+
+          <article *ngIf="isAdmin" class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-base font-semibold text-primary">Programar Nuevo Viaje</h2>
+              <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 text-[10px] font-bold">[Solo ADMIN]</span>
+            </div>
+            <form class="grid grid-cols-2 gap-2" (ngSubmit)="createTrip()">
+              <select [(ngModel)]="tripForm.routeCode" name="tripRoute" class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs">
+                <option *ngFor="let r of routesList" [value]="r.code">{{ r.code }} — {{ r.name }}</option>
+              </select>
+              <select [(ngModel)]="tripForm.busId" name="tripBus" class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs">
+                <option *ngFor="let b of buses" [value]="b.id">{{ b.plate }} ({{ b.enabledSeats }} as.)</option>
+              </select>
+              <input type="text" [(ngModel)]="tripForm.scheduledDepartureUtc" name="tripDep" placeholder="Salida UTC ISO" required class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <input type="text" [(ngModel)]="tripForm.scheduledArrivalUtc" name="tripArr" placeholder="Llegada UTC ISO" required class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <input type="number" step="0.01" [(ngModel)]="tripForm.baseFarePen" name="tripFare" placeholder="Tarifa S/" required class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <input type="number" [(ngModel)]="tripForm.turnaroundMinutes" name="tripTurn" placeholder="Prep min" required class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <button type="submit" [disabled]="busy" class="col-span-2 h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold">Programar Viaje y Generar Asientos</button>
+            </form>
+          </article>
+
+          <article *ngIf="!isAdmin" class="lg:col-span-2 bg-surface-container-low rounded-xl p-space-md border border-outline-variant/40 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-bold mr-2">[Restringido a ADMIN]</span>
+              <span class="text-xs text-secondary">El alta de buses, programación de nuevos viajes y creación de usuarios están bloqueados para el rol <strong>OPERADOR</strong> en API y UI.</span>
+            </div>
+            <button type="button" (click)="testOperatorForbidden()" class="px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-xs font-semibold text-primary">
+              Probar bloqueo en backend (403)
+            </button>
+          </article>
+        </div>
       </section>
 
       <!-- ======================================================================= -->
@@ -945,7 +1014,10 @@
       <!-- ======================================================================= -->
       <section *ngIf="activeTab === 'reportes-auditoria'" class="flex flex-col gap-space-lg">
         <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm" *ngIf="report">
-          <h1 class="text-xl font-semibold text-primary mb-3">Indicadores Operativos (Moneda PEN)</h1>
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <h1 class="text-xl font-semibold text-primary">Indicadores Operativos (Moneda PEN)</h1>
+            <button type="button" (click)="loadReportsAndCatalogs()" class="px-3 py-1.5 rounded-lg bg-surface-container text-primary text-xs font-semibold">Actualizar indicadores</button>
+          </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
             <div class="p-4 rounded-xl bg-surface-container-low">
               <span class="text-[11px] uppercase font-semibold text-secondary">Ingresos Pasajes Vigentes</span>
@@ -965,6 +1037,42 @@
               <div class="text-2xl font-bold font-mono text-primary mt-1">{{ report.tripsWithValidWeather }} / {{ report.tripsWithActualTimes }}</div>
               <span class="text-[11px] text-secondary">de {{ report.totalTrips }} viajes</span>
             </div>
+          </div>
+        </article>
+
+        <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <h2 class="text-base font-semibold text-primary">Gestión de Usuarios Internos</h2>
+            <span class="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 text-[10px] font-bold">[Solo ADMIN]</span>
+          </div>
+          <div *ngIf="!isAdmin" class="text-xs text-secondary">
+            Solo un usuario con rol <strong>ADMIN</strong> puede listar o crear cuentas internas en <code class="font-mono">/api/v1/users</code>.
+          </div>
+          <div *ngIf="isAdmin" class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
+            <table class="w-full text-xs text-left">
+              <thead class="bg-surface-container-low text-secondary uppercase text-[10px]">
+                <tr><th class="p-2">Usuario</th><th class="p-2">Nombre</th><th class="p-2">Rol</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let u of usersList" class="border-b border-outline-variant/30">
+                  <td class="p-2 font-mono font-bold text-primary">{{ u.username }}</td>
+                  <td class="p-2">{{ u.fullName }}</td>
+                  <td class="p-2"><span class="px-2 py-0.5 rounded bg-surface-container text-[10px] font-bold">{{ u.role }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <form class="flex flex-col gap-2" (ngSubmit)="createUser()">
+              <input type="text" [(ngModel)]="userForm.username" name="newUser" placeholder="Nombre de usuario" required class="h-9 px-3 rounded-lg bg-surface-container-low text-xs font-mono" />
+              <input type="text" [(ngModel)]="userForm.fullName" name="newFullName" placeholder="Nombre completo" required class="h-9 px-3 rounded-lg bg-surface-container-low text-xs" />
+              <div class="grid grid-cols-2 gap-2">
+                <select [(ngModel)]="userForm.role" name="newRole" class="h-9 px-2.5 rounded-lg bg-surface-container-low text-xs">
+                  <option value="OPERADOR">OPERADOR</option>
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+                <input type="password" [(ngModel)]="userForm.password" name="newPwd" placeholder="Contraseña" required class="h-9 px-3 rounded-lg bg-surface-container-low text-xs" />
+              </div>
+              <button type="submit" [disabled]="busy" class="h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold">Crear Usuario Interno</button>
+            </form>
           </div>
         </article>
       </section>

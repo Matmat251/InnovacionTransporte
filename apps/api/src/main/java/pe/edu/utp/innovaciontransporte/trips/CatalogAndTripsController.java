@@ -8,6 +8,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.SqlParameterValue;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +25,7 @@ import pe.edu.utp.innovaciontransporte.common.AuditService;
 import pe.edu.utp.innovaciontransporte.common.JdbcHelper;
 
 import java.math.BigDecimal;
+import java.sql.Types;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -136,6 +139,7 @@ public class CatalogAndTripsController {
 
     @PostMapping("/buses")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
     public Map<String, Object> createBus(@Valid @RequestBody CreateBusRequest body, Authentication auth) {
         UUID id = UUID.randomUUID();
         int enabledSeats = body.enabledSeats() != null ? body.enabledSeats() : body.seatCapacity();
@@ -291,6 +295,7 @@ public class CatalogAndTripsController {
 
     @PostMapping("/trips")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     public Map<String, Object> createTrip(@Valid @RequestBody CreateTripRequest body, Authentication auth) {
         List<Map<String, Object>> routeRows = jdbc.queryForList(
@@ -344,7 +349,7 @@ public class CatalogAndTripsController {
                 JdbcHelper.ts(arr),
                 body.turnaroundMinutes(),
                 body.baseFarePen(),
-                body.previousTripId()
+                new SqlParameterValue(Types.OTHER, body.previousTripId())
         );
 
         for (int seat = 1; seat <= seatCap; seat++) {
