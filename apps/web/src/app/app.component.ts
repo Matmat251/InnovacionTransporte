@@ -81,6 +81,7 @@ export class AppComponent implements OnInit {
   latestRisk: any = null;
   simulation: any = null;
   officialSync: any = null;
+  copilotAdvisory: any = null;
 
   seats: any[] = [];
   passengers: any[] = [];
@@ -245,6 +246,7 @@ export class AppComponent implements OnInit {
     this.selectedTrip = trip;
     this.simulation = null;
     this.officialSync = null;
+    this.copilotAdvisory = null;
     this.lastTicket = null;
     this.saleForm.amountPen = trip.baseFarePen;
     this.loadWeather(trip.id);
@@ -337,6 +339,23 @@ export class AppComponent implements OnInit {
     });
   }
 
+  generateCopilotAdvisory(): void {
+    if (!this.selectedTrip) return;
+    this.busy = true;
+    this.http.post<any>(`/api/v1/trips/${this.selectedTrip.id}/copilot-advisories`, {}).subscribe({
+      next: (res) => {
+        this.copilotAdvisory = res;
+        this.busy = false;
+        this.infoMessage = `Dictamen Copiloto IA generado (${res.provider} · ${res.model}).`;
+      },
+      error: (err) => this.handleError(err, 'No se pudo generar el dictamen del Copiloto IA.'),
+    });
+  }
+
+  printVoucher(): void {
+    window.print();
+  }
+
   simulateContingency(): void {
     if (!this.selectedTrip) return;
     this.busy = true;
@@ -358,7 +377,7 @@ export class AppComponent implements OnInit {
       actionType: option.actionType,
       reserveBusId: option.reserveBusId || null,
       newDepartureUtc: option.suggestedDepartureUtc || null,
-      rationale: 'Confirmación operativa desde panel AndesRoute Central',
+      rationale: this.copilotAdvisory?.justificacionAuditoria || 'Confirmación operativa desde panel AndesRoute Central',
     }).subscribe({
       next: () => {
         this.busy = false;

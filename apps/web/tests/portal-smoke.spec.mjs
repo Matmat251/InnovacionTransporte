@@ -18,6 +18,8 @@ test('portal aplica diseño Stitch AndesRoute Central con etiquetas y 4 bloques 
   assert.match(html, /2\. Alertas viales/);
   assert.match(html, /Sincronizar SENAMHI WFS/);
   assert.match(html, /3\. Riesgo experimental/);
+  assert.match(html, /Copiloto Groq IA/);
+  assert.match(html, /Imprimir comprobante/);
   assert.match(html, /4\. Control de contingencias/);
   assert.match(html, /Distribución de Cabina/);
   assert.match(html, /ANDESROUTE CARGO/);
