@@ -37,7 +37,7 @@ class SystemInfoIntegrationTest {
                 .andExpect(jsonPath("$.timezone").value("America/Lima"))
                 .andExpect(jsonPath("$.delayThresholdMinutes").value(30))
                 .andExpect(jsonPath("$.schemaInitialized").value(true))
-                .andExpect(jsonPath("$.seededRouteSegments").value(12));
+                .andExpect(jsonPath("$.seededRouteSegments").value(24));
     }
 
     @Test

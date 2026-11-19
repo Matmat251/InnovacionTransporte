@@ -72,7 +72,7 @@ public class WeatherRiskContingencyController {
             ObjectMapper objectMapper,
             @Value("${app.risk-service-url}") String riskServiceUrl,
             @Value("${app.open-meteo-base-url}") String openMeteoBaseUrl,
-            @Value("${app.senamhi-wfs-url:https://idesep.senamhi.gob.pe/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=g_04_02:04_02_005_03_002_512_0000_00_00&BBOX=-77.2,-12.3,-75.0,-11.3&outputFormat=application/json}") String senamhiWfsUrl,
+            @Value("${app.senamhi-wfs-url:https://idesep.senamhi.gob.pe/geoserver/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=g_04_02:04_02_005_03_002_512_0000_00_00&BBOX=-77.5,-13.2,-74.8,-10.8&outputFormat=application/json}") String senamhiWfsUrl,
             @Value("${app.mtc-concessions-geojson-url:https://d11asvs58xfdql.cloudfront.net/road-concessions.geojson}") String mtcConcessionsUrl,
             @Value("${app.mtc-alt-routes-geojson-url:https://dg6oz2i1iyvxw.cloudfront.net/alt-routes-peru.geojson}") String mtcAltRoutesUrl,
             @Value("${app.sutran-alerts-url:https://api.sigea.dev.sutran.gob.pe/public/alerts}") String sutranAlertsUrl,

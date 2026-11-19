@@ -21,7 +21,7 @@ logging.basicConfig(
 logger = logging.getLogger("risk-inference")
 
 PERU_OFFSET = timedelta(hours=-5)
-SUPPORTED_ROUTES = {"LIM-HYO-01"}
+SUPPORTED_ROUTES = {"LIM-HYO-01", "HYO-LIM-01", "HYO-LIM-ALT-01", "LIM-TRM-01", "TRM-LIM-01"}
 
 
 class WeatherSummary(BaseModel):
@@ -134,7 +134,7 @@ def predict_delay(payload: PredictionRequest) -> PredictionResponse:
     now_utc = datetime.now(timezone.utc)
 
     missing: list[str] = []
-    if payload.routeCode not in SUPPORTED_ROUTES:
+    if payload.routeCode not in SUPPORTED_ROUTES and not payload.routeCode.startswith(("LIM-", "HYO-", "TRM-")):
         missing.append(f"routeCode:{payload.routeCode}")
     if payload.weatherSummary is None:
         missing.append("weatherSummary")
