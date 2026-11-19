@@ -93,6 +93,7 @@
                 >
                   <option value="LIM-YERB">Terminal Terrestre Yerbateros (Lima - Km 03)</option>
                   <option value="HYO-TERM">Terminal Terrestre Huancayo (Junín - Km 305)</option>
+                  <option value="LMC-TERM">Terminal Terrestre La Merced (Selva Central - Km 310)</option>
                 </select>
               </div>
             </div>
@@ -466,52 +467,93 @@
           </div>
         </div>
 
-        <!-- SVG Orographic Profile & Telemetry (Stitch Screen 5) -->
-        <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm">
-          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <!-- SVG Orographic Profile & Telemetry (Dinámico e Interactivo) -->
+        <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm flex flex-col gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 class="text-base font-semibold text-primary">Perfil Orográfico y Tramos de Consulta PE-22 (Lima – Ticlio 4,818m – Huancayo)</h2>
-              <p class="text-xs text-secondary">Zona crítica de heladas y deslizamientos entre Km 100 y Km 150 (San Mateo – Casapalca – Ticlio)</p>
+              <h2 class="text-base font-semibold text-primary">
+                Perfil Orográfico y Tramos de Consulta — {{ selectedTrip.routeCode }} ({{ selectedTrip.routeName }})
+              </h2>
+              <p class="text-xs text-secondary">
+                Haz clic en cualquier nodo del perfil para inspeccionar Open-Meteo, estación SENAMHI y alertas viales SUTRAN de ese tramo.
+                <span *ngIf="peakChartNode" class="font-semibold text-primary">
+                  Pico crítico: {{ peakChartNode.checkpointName }} ({{ peakChartNode.elevationMasl | number }} msnm).
+                </span>
+              </p>
             </div>
-            <a href="https://idesep.senamhi.gob.pe/portalidesep/idesep_componente_catalogo_geoservicios_wfs.jsp" target="_blank" rel="noopener" class="text-xs font-semibold text-primary underline">
-              Consultar SENAMHI IDESEP WFS
-            </a>
+            <div class="flex items-center gap-3 text-[11px]">
+              <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span>Despejado</span>
+              <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-600 inline-block"></span>Restringido / Lluvia</span>
+              <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span>Cerrado</span>
+              <a href="https://idesep.senamhi.gob.pe/portalidesep/idesep_componente_catalogo_geoservicios_wfs.jsp" target="_blank" rel="noopener" class="font-semibold text-primary underline">
+                SENAMHI WFS
+              </a>
+            </div>
           </div>
-          <svg class="w-full h-48 select-none" fill="none" viewBox="0 0 900 235" xmlns="http://www.w3.org/2000/svg">
-            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="40" x2="880" y1="20" y2="20"></line>
-            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="40" x2="880" y1="65" y2="65"></line>
-            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="40" x2="880" y1="110" y2="110"></line>
-            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="40" x2="880" y1="155" y2="155"></line>
-            <line stroke="#e2e8f0" stroke-width="1" x1="40" x2="880" y1="200" y2="200"></line>
-            <text fill="#94a3b8" font-size="10" font-weight="500" x="5" y="24">5,000m</text>
-            <text fill="#94a3b8" font-size="10" font-weight="500" x="5" y="69">4,000m</text>
-            <text fill="#94a3b8" font-size="10" font-weight="500" x="5" y="114">3,000m</text>
-            <text fill="#94a3b8" font-size="10" font-weight="500" x="5" y="159">2,000m</text>
-            <text fill="#94a3b8" font-size="10" font-weight="500" x="5" y="204">500m</text>
+
+          <svg *ngIf="chartNodes.length > 0" class="w-full h-52 select-none" fill="none" viewBox="0 0 920 242" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Perfil orográfico interactivo de ruta">
+            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="44" x2="890" y1="20" y2="20"></line>
+            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="44" x2="890" y1="56" y2="56"></line>
+            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="44" x2="890" y1="92" y2="92"></line>
+            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="44" x2="890" y1="128" y2="128"></line>
+            <line stroke="#f1f5f9" stroke-dasharray="4 4" stroke-width="1" x1="44" x2="890" y1="164" y2="164"></line>
+            <line stroke="#e2e8f0" stroke-width="1" x1="44" x2="890" y1="200" y2="200"></line>
+            <text fill="#94a3b8" font-size="10" font-weight="500" x="4" y="24">5,000m</text>
+            <text fill="#94a3b8" font-size="10" font-weight="500" x="4" y="60">4,000m</text>
+            <text fill="#94a3b8" font-size="10" font-weight="500" x="4" y="96">3,000m</text>
+            <text fill="#94a3b8" font-size="10" font-weight="500" x="4" y="132">2,000m</text>
+            <text fill="#94a3b8" font-size="10" font-weight="500" x="4" y="168">1,000m</text>
+            <text fill="#94a3b8" font-size="10" font-weight="500" x="14" y="204">0m</text>
             <defs>
               <linearGradient id="elevGrad" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stop-color="#0f2a4a" stop-opacity="0.18"></stop>
                 <stop offset="100%" stop-color="#0f2a4a" stop-opacity="0.01"></stop>
               </linearGradient>
-              <linearGradient id="ticlioZone" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stop-color="#dc2626" stop-opacity="0.18"></stop>
+              <linearGradient id="peakZone" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#dc2626" stop-opacity="0.14"></stop>
                 <stop offset="100%" stop-color="#dc2626" stop-opacity="0"></stop>
               </linearGradient>
             </defs>
-            <rect fill="url(#ticlioZone)" height="180" rx="4" width="160" x="360" y="20"></rect>
-            <path d="M 60 198 L 140 188 L 250 140 L 320 110 L 380 60 L 440 28 L 500 44 L 580 86 L 720 102 L 860 108 L 860 200 L 60 200 Z" fill="url(#elevGrad)"></path>
-            <path d="M 60 198 L 140 188 L 250 140 L 320 110 L 380 60 L 440 28 L 500 44 L 580 86 L 720 102 L 860 108" stroke="#0f2a4a" stroke-linejoin="round" stroke-width="2.5"></path>
-            <circle cx="60" cy="198" fill="#0f2a4a" r="4" stroke="#fff" stroke-width="2"></circle>
-            <text fill="#475569" font-size="10" font-weight="600" x="45" y="218">Lima (Km 0)</text>
-            <circle cx="250" cy="140" fill="#0f2a4a" r="4" stroke="#fff" stroke-width="2"></circle>
-            <text fill="#475569" font-size="10" font-weight="600" x="225" y="160">Matucana</text>
-            <circle cx="440" cy="28" fill="#dc2626" r="6" stroke="#fff" stroke-width="2"></circle>
-            <text fill="#b91c1c" font-size="11" font-weight="700" x="395" y="16">ABRA TICLIO 4,818m</text>
-            <circle cx="580" cy="86" fill="#0f2a4a" r="4" stroke="#fff" stroke-width="2"></circle>
-            <text fill="#475569" font-size="10" font-weight="600" x="560" y="106">La Oroya</text>
-            <circle cx="860" cy="108" fill="#0f2a4a" r="4" stroke="#fff" stroke-width="2"></circle>
-            <text fill="#475569" font-size="10" font-weight="600" x="805" y="128">Huancayo (Km 305)</text>
+            <rect *ngIf="peakChartNode" fill="url(#peakZone)" height="180" rx="4" width="120" [attr.x]="peakChartNode.x - 60" y="20"></rect>
+            <path [attr.d]="chartAreaPath" fill="url(#elevGrad)"></path>
+            <path [attr.d]="chartLinePath" stroke="#0f2a4a" stroke-linejoin="round" stroke-width="2.5"></path>
+
+            <g *ngFor="let node of chartNodes" class="cursor-pointer" (click)="selectChartNode(node)">
+              <circle *ngIf="selectedChartNode?.id === node.id" [attr.cx]="node.x" [attr.cy]="node.y" r="11" fill="none" stroke="#0f2a4a" stroke-width="1.5" stroke-dasharray="2 2"></circle>
+              <circle [attr.cx]="node.x" [attr.cy]="node.y" [attr.r]="node.isPeak || selectedChartNode?.id === node.id ? 6.5 : 5" [attr.fill]="node.color" stroke="#ffffff" stroke-width="2"></circle>
+              <text *ngIf="node.obs && node.obs.temperatureC !== null && node.obs.temperatureC !== undefined"
+                    [attr.x]="node.x" [attr.y]="node.y - 12" text-anchor="middle" [attr.fill]="node.color" font-size="9.5" font-weight="700">
+                {{ node.obs.temperatureC }}°C · {{ node.obs.precipitationProbPct }}%
+              </text>
+              <text [attr.x]="node.x" y="216" text-anchor="middle" [attr.fill]="selectedChartNode?.id === node.id ? '#0f2a4a' : '#475569'" font-size="10" [attr.font-weight]="selectedChartNode?.id === node.id ? '700' : '600'">
+                {{ node.checkpointName }}
+              </text>
+              <text [attr.x]="node.x" y="229" text-anchor="middle" fill="#64748b" font-size="9" font-family="monospace">
+                {{ node.elevationMasl | number }}m
+              </text>
+            </g>
           </svg>
+
+          <!-- Inspector interactivo del nodo seleccionado -->
+          <div *ngIf="selectedChartNode" class="p-3 rounded-lg bg-surface-container-low border border-outline-variant/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div class="flex flex-col gap-0.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold text-white" [style.background-color]="selectedChartNode.color">{{ selectedChartNode.status }}</span>
+                <strong class="text-primary">Tramo {{ selectedChartNode.sequenceOrder }}: {{ selectedChartNode.checkpointName }}</strong>
+                <span class="font-mono text-secondary">{{ selectedChartNode.elevationMasl | number }} msnm · {{ selectedChartNode.latitude }}, {{ selectedChartNode.longitude }}</span>
+              </div>
+              <p class="text-[11px] text-secondary" *ngIf="selectedChartNode.obs && selectedChartNode.obs.temperatureC !== null">
+                Open-Meteo: <strong>{{ selectedChartNode.obs.temperatureC }}°C</strong> · Lluvia {{ selectedChartNode.obs.precipitationMm }} mm ({{ selectedChartNode.obs.precipitationProbPct }}%) · Viento {{ selectedChartNode.obs.windKmh }} km/h · Visibilidad {{ selectedChartNode.obs.visibilityMeters }} m
+              </p>
+              <p class="text-[11px] text-secondary" *ngIf="selectedChartNode.senamhi">
+                SENAMHI WFS más cercano: <strong>{{ selectedChartNode.senamhi.stationName }}</strong> ({{ selectedChartNode.senamhi.distanceKm }} km) · {{ selectedChartNode.senamhi.precipitationMm }} mm (anomalía {{ selectedChartNode.senamhi.anomalyPct }}%)
+              </p>
+              <p class="text-[11px] text-rose-800 font-semibold" *ngIf="selectedChartNode.alerts.length > 0">
+                Alerta activa: {{ selectedChartNode.alerts[0].sourceName }} — {{ selectedChartNode.alerts[0].description }}
+              </p>
+            </div>
+            <span class="text-[10px] text-secondary shrink-0">Tramo seleccionado en formulario de alerta</span>
+          </div>
         </article>
 
         <!-- 4 Bloques Operativos del Viaje -->
@@ -1019,6 +1061,7 @@
               <select [(ngModel)]="busForm.homeTerminalCode" name="busTerminal" class="col-span-2 h-9 px-3 rounded-lg bg-surface-container-low text-xs">
                 <option value="LIM-YERB">Terminal Yerbateros (LIM-YERB)</option>
                 <option value="HYO-TERM">Terminal Huancayo (HYO-TERM)</option>
+                <option value="LMC-TERM">Terminal La Merced - Chanchamayo (LMC-TERM)</option>
               </select>
               <button type="submit" [disabled]="busy" class="col-span-2 h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold">Registrar Bus</button>
             </form>

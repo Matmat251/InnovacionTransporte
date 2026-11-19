@@ -82,6 +82,7 @@ export class AppComponent implements OnInit {
   simulation: any = null;
   officialSync: any = null;
   copilotAdvisory: any = null;
+  selectedSegmentId: string | null = null;
 
   seats: any[] = [];
   passengers: any[] = [];
@@ -247,7 +248,12 @@ export class AppComponent implements OnInit {
     this.simulation = null;
     this.officialSync = null;
     this.copilotAdvisory = null;
+    this.selectedSegmentId = null;
     this.lastTicket = null;
+    const routeSegs = this.routesList.find((r) => r.id === trip.routeId)?.segments || [];
+    if (routeSegs.length > 0) {
+      this.alertForm.segmentId = routeSegs[0].id;
+    }
     this.saleForm.amountPen = trip.baseFarePen;
     this.loadWeather(trip.id);
     this.loadRoadAlerts(trip.routeId);
@@ -604,6 +610,104 @@ export class AppComponent implements OnInit {
         error: () => {},
       });
     }
+  }
+
+  get activeRouteSegments(): any[] {
+    if (!this.selectedTrip) return [];
+    const route = this.routesList.find((r) => r.id === this.selectedTrip!.routeId);
+    if (route?.segments?.length) {
+      return route.segments;
+    }
+    return (this.weatherData?.observations || []).map((o: any) => ({
+      id: o.segmentId,
+      sequenceOrder: o.sequenceOrder,
+      name: o.segmentName,
+      checkpointName: o.checkpointName,
+      latitude: o.latitude,
+      longitude: o.longitude,
+      elevationMasl: 1500,
+    }));
+  }
+
+  get chartNodes(): any[] {
+    const segs = this.activeRouteSegments;
+    if (segs.length === 0) return [];
+    const obsList: any[] = this.weatherData?.observations || [];
+    const senList: any[] = this.officialSync?.senamhiMatchedStations || [];
+    const maxElev = Math.max(...segs.map((s) => Number(s.elevationMasl || 0)));
+
+    return segs.map((seg, i) => {
+      const elev = Number(seg.elevationMasl || 500);
+      const x = Math.round(75 + (i * 770) / Math.max(1, segs.length - 1));
+      const y = Math.max(26, Math.min(196, Math.round(200 - (elev / 5000) * 180)));
+      const obs = obsList.find((o) => o.segmentId === seg.id || o.checkpointName === seg.checkpointName) || null;
+      const alerts = this.roadAlerts.filter((a) => a.active && (a.segmentId === seg.id || a.checkpointName === seg.checkpointName));
+      const senamhi = senList.find((s) => s.segmentId === seg.id || s.checkpointName === seg.checkpointName) || null;
+
+      let status: 'DESPEJADO' | 'TRANSITO_RESTRINGIDO' | 'CERRADO' = 'DESPEJADO';
+      if (alerts.some((a) => a.status === 'CERRADO')) {
+        status = 'CERRADO';
+      } else if (
+        alerts.some((a) => a.status === 'TRANSITO_RESTRINGIDO') ||
+        (obs && (Number(obs.precipitationProbPct || 0) >= 60 || (obs.temperatureC !== null && obs.temperatureC !== undefined && Number(obs.temperatureC) <= 3)))
+      ) {
+        status = 'TRANSITO_RESTRINGIDO';
+      }
+
+      const color = status === 'CERRADO' ? '#dc2626' : status === 'TRANSITO_RESTRINGIDO' ? '#d97706' : '#059669';
+      return {
+        id: seg.id,
+        sequenceOrder: seg.sequenceOrder || i + 1,
+        checkpointName: seg.checkpointName,
+        segmentName: seg.name,
+        elevationMasl: elev,
+        latitude: seg.latitude,
+        longitude: seg.longitude,
+        x,
+        y,
+        isPeak: elev === maxElev,
+        obs,
+        alerts,
+        senamhi,
+        status,
+        color,
+      };
+    });
+  }
+
+  get chartLinePath(): string {
+    const nodes = this.chartNodes;
+    if (nodes.length === 0) return '';
+    return nodes.map((n, i) => `${i === 0 ? 'M' : 'L'} ${n.x} ${n.y}`).join(' ');
+  }
+
+  get chartAreaPath(): string {
+    const nodes = this.chartNodes;
+    if (nodes.length === 0) return '';
+    const line = nodes.map((n, i) => `${i === 0 ? 'M' : 'L'} ${n.x} ${n.y}`).join(' ');
+    const last = nodes[nodes.length - 1];
+    const first = nodes[0];
+    return `${line} L ${last.x} 200 L ${first.x} 200 Z`;
+  }
+
+  get peakChartNode(): any {
+    const nodes = this.chartNodes;
+    return nodes.find((n) => n.isPeak) || nodes[0] || null;
+  }
+
+  get selectedChartNode(): any {
+    const nodes = this.chartNodes;
+    if (nodes.length === 0) return null;
+    if (this.selectedSegmentId) {
+      const found = nodes.find((n) => n.id === this.selectedSegmentId);
+      if (found) return found;
+    }
+    return this.peakChartNode;
+  }
+
+  selectChartNode(node: any): void {
+    this.selectedSegmentId = node.id;
+    this.alertForm.segmentId = node.id;
   }
 
   badgeClass(status: string): string {
