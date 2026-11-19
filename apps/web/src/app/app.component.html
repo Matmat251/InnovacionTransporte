@@ -625,9 +625,28 @@
               <p *ngIf="latestRisk.missingFeatures" class="text-xs text-error">Faltantes: {{ latestRisk.missingFeatures }}</p>
             </div>
             <p *ngIf="!latestRisk" class="text-xs text-secondary">Aún no se ejecutó evaluación de riesgo en este viaje.</p>
-            <button type="button" (click)="evaluateRisk()" [disabled]="busy" class="h-9 px-3 rounded-lg bg-primary text-on-primary text-xs font-semibold self-start">
-              Ejecutar evaluación IA (/internal/v1/predictions)
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" (click)="evaluateRisk()" [disabled]="busy" class="h-9 px-3 rounded-lg bg-primary text-on-primary text-xs font-semibold">
+                Ejecutar evaluación IA (/internal/v1/predictions)
+              </button>
+              <button type="button" (click)="generateCopilotAdvisory()" [disabled]="busy" class="h-9 px-3 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold border border-outline-variant/50">
+                Generar Dictamen Copiloto Groq IA
+              </button>
+            </div>
+            <div *ngIf="copilotAdvisory" class="p-3 rounded-lg bg-surface-container-low border border-outline-variant/50 flex flex-col gap-1.5 text-xs">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold" [ngClass]="badgeClass(copilotAdvisory.status === 'CONECTADO' ? 'CONECTADO' : 'POR_VERIFICAR')">
+                  [{{ copilotAdvisory.provider }} · {{ copilotAdvisory.model }}]
+                </span>
+                <span class="text-[10px] font-mono text-secondary">{{ copilotAdvisory.latencyMs }} ms</span>
+              </div>
+              <p><strong>Dictamen:</strong> {{ copilotAdvisory.dictamenEjecutivo }}</p>
+              <p><strong>Acción recomendada:</strong> {{ copilotAdvisory.accionRecomendada }}</p>
+              <p class="text-[11px] text-secondary"><strong>Justificación auditoría:</strong> {{ copilotAdvisory.justificacionAuditoria }}</p>
+              <p class="p-2 rounded bg-surface-container-lowest border border-outline-variant/40 text-[11px]">
+                <strong>Comunicado operativo:</strong> {{ copilotAdvisory.comunicadoOperativo }}
+              </p>
+            </div>
           </article>
 
           <!-- Bloque 4: Control de Contingencias de Flota -->
@@ -780,9 +799,14 @@
               </div>
               <p class="text-xs">Asiento #{{ lastTicket.seatNumber }} · <strong>S/ {{ lastTicket.amountPen | number:'1.2-2' }}</strong></p>
               <p class="text-[11px] text-secondary">Reintento idempotente: {{ lastTicket.idempotentReplay ? 'Sí (misma respuesta)' : 'No (nueva venta)' }}</p>
-              <button *ngIf="lastTicket.saleStatus === 'VIGENTE'" type="button" (click)="cancelSale(lastTicket.saleId)" [disabled]="busy" class="mt-1 h-8 rounded bg-error text-on-error text-xs font-semibold">
-                Anular venta y liberar asiento
-              </button>
+              <div class="flex flex-wrap gap-2 mt-1">
+                <button type="button" (click)="printVoucher()" class="h-8 px-3 rounded bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold">
+                  Imprimir comprobante
+                </button>
+                <button *ngIf="lastTicket.saleStatus === 'VIGENTE'" type="button" (click)="cancelSale(lastTicket.saleId)" [disabled]="busy" class="h-8 px-3 rounded bg-error text-on-error text-xs font-semibold">
+                  Anular venta y liberar asiento
+                </button>
+              </div>
             </div>
           </article>
 
@@ -881,6 +905,9 @@
               <div class="bg-surface p-2 rounded"><span class="text-[9px] text-secondary block">PESO</span><strong>{{ parcelForm.weightKg }} KG</strong></div>
               <div class="bg-surface p-2 rounded"><span class="text-[9px] text-secondary block">IMPORTE</span><strong>S/ {{ parcelForm.amountPen | number:'1.2-2' }}</strong></div>
             </div>
+            <button type="button" (click)="printVoucher()" class="mt-2 h-8 px-3 rounded bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold font-sans">
+              Imprimir comprobante
+            </button>
           </aside>
         </div>
 

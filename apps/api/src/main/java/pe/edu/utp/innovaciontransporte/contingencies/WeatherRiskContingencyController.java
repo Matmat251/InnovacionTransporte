@@ -57,6 +57,9 @@ public class WeatherRiskContingencyController {
     private final String mtcConcessionsUrl;
     private final String mtcAltRoutesUrl;
     private final String sutranAlertsUrl;
+    private final String groqApiKey;
+    private final String groqBaseUrl;
+    private final String groqModel;
     private final int delayThresholdMinutes;
     private final int cacheTtlMinutes;
     private final RestClient weatherClient;
@@ -73,6 +76,9 @@ public class WeatherRiskContingencyController {
             @Value("${app.mtc-concessions-geojson-url:https://d11asvs58xfdql.cloudfront.net/road-concessions.geojson}") String mtcConcessionsUrl,
             @Value("${app.mtc-alt-routes-geojson-url:https://dg6oz2i1iyvxw.cloudfront.net/alt-routes-peru.geojson}") String mtcAltRoutesUrl,
             @Value("${app.sutran-alerts-url:https://api.sigea.dev.sutran.gob.pe/public/alerts}") String sutranAlertsUrl,
+            @Value("${app.groq-api-key:}") String groqApiKey,
+            @Value("${app.groq-base-url:https://api.groq.com/openai/v1/chat/completions}") String groqBaseUrl,
+            @Value("${app.groq-model:openai/gpt-oss-20b}") String groqModel,
             @Value("${app.open-meteo-timeout-ms:3500}") int openMeteoTimeoutMs,
             @Value("${app.open-meteo-cache-ttl-minutes:30}") int cacheTtlMinutes,
             @Value("${app.delay-threshold-minutes:30}") int delayThresholdMinutes
@@ -86,6 +92,9 @@ public class WeatherRiskContingencyController {
         this.mtcConcessionsUrl = mtcConcessionsUrl;
         this.mtcAltRoutesUrl = mtcAltRoutesUrl;
         this.sutranAlertsUrl = sutranAlertsUrl;
+        this.groqApiKey = groqApiKey != null ? groqApiKey.trim() : "";
+        this.groqBaseUrl = groqBaseUrl;
+        this.groqModel = groqModel;
         this.delayThresholdMinutes = delayThresholdMinutes;
         this.cacheTtlMinutes = cacheTtlMinutes;
 
@@ -469,6 +478,141 @@ public class WeatherRiskContingencyController {
         response.put("sutranApiStatus", sutranApiStatus);
         response.put("generatedAlertsCount", generatedAlertsCount);
         return response;
+    }
+
+    @PostMapping("/trips/{id}/copilot-advisories")
+    @Transactional
+    public Map<String, Object> generateCopilotAdvisory(@PathVariable UUID id, Authentication auth) {
+        long startedNs = System.nanoTime();
+        Map<String, Object> trip = requireTrip(id);
+        UUID routeId = JdbcHelper.uuid(trip.get("route_id"));
+        UUID busId = JdbcHelper.uuid(trip.get("bus_id"));
+        Map<String, Object> route = jdbc.queryForMap("SELECT code, name FROM routes WHERE id = ?", routeId);
+        String busPlate = jdbc.queryForObject("SELECT plate FROM buses WHERE id = ?", String.class, busId);
+        String destTerminal = String.valueOf(trip.get("destination_terminal_code"));
+
+        int soldTickets = countActiveTickets(id);
+        int parcelCount = countTripParcels(id);
+        BigDecimal parcelWeight = sumTripParcelWeight(id);
+        String latestRiskLevel = findLatestRiskLevel(id);
+        Map<String, Object> weatherSummary = summarizeWeather(loadLatestWeather(id));
+
+        List<String> activeAlerts = jdbc.queryForList(
+                """
+                SELECT rs.checkpoint_name || ' [' || ra.source_name || '/' || ra.status || ']: ' || COALESCE(ra.description, '')
+                FROM road_alerts ra
+                JOIN route_segments rs ON rs.id = ra.segment_id
+                WHERE ra.active = TRUE AND ra.valid_until_utc > CURRENT_TIMESTAMP AND rs.route_id = ?
+                ORDER BY ra.checked_at_utc DESC
+                """,
+                String.class,
+                routeId
+        );
+
+        List<String> reserveBuses = jdbc.queryForList(
+                "SELECT plate || ' (' || enabled_seats || ' asientos, ' || cargo_capacity_kg || ' kg)' FROM buses WHERE current_terminal_code = ? AND status = 'DISPONIBLE'",
+                String.class,
+                destTerminal
+        );
+
+        String fallbackDictamen = activeAlerts.isEmpty()
+                ? String.format(Locale.US, "Viaje %s (%s) en operación con riesgo %s; verificar margen con buses de reserva en %s.",
+                route.get("code"), busPlate, latestRiskLevel, destTerminal)
+                : String.format(Locale.US, "Atención en %s (%s): %d alertas viales activas y riesgo %s; evaluar contingencia de flota en %s.",
+                route.get("code"), busPlate, activeAlerts.size(), latestRiskLevel, destTerminal);
+        String fallbackAccion = reserveBuses.isEmpty()
+                ? "Evaluar reprogramación de salida y coordinar monitoreo en ruta con el conductor."
+                : "Evaluar cambio preventivo al bus de reserva " + reserveBuses.get(0) + " o ajustar salida según alertas vigentes.";
+        String fallbackJustificacion = String.format(Locale.US,
+                "Evaluación basada en riesgo %s, %d pasajes emitidos, %d encomiendas (%.1f kg) y %d alertas viales vigentes en %s.",
+                latestRiskLevel, soldTickets, parcelCount, parcelWeight, activeAlerts.size(), route.get("code"));
+        String fallbackComunicado = String.format(Locale.US,
+                "Aviso operativo Expreso Corredor Central (%s): mantenemos monitoreo preventivo en carretera central (%s). Cualquier ajuste de unidad será informado en sala de embarque.",
+                route.get("code"), activeAlerts.isEmpty() ? "condición climática monitoreada" : activeAlerts.size() + " alerta(s) viales registradas");
+
+        String status = "RESPALDO_LOCAL";
+        String provider = "MOTOR_DETERMINISTA";
+        String model = "reglas-corredor-pe22";
+        String dictamenEjecutivo = fallbackDictamen;
+        String accionRecomendada = fallbackAccion;
+        String justificacionAuditoria = fallbackJustificacion;
+        String comunicadoOperativo = fallbackComunicado;
+
+        if (!groqApiKey.isBlank()) {
+            try {
+                String prompt = String.format(Locale.US,
+                        """
+                        Ruta: %s (%s) | Bus principal: %s | Terminal relevo: %s
+                        Salida UTC: %s | Llegada UTC: %s
+                        Carga actual: %d pasajes emitidos, %d encomiendas (%.1f kg)
+                        Nivel riesgo scikit-learn: %s | Resumen clima Open-Meteo: %s
+                        Alertas viales vigentes (SUTRAN/SENAMHI): %s
+                        Buses de reserva disponibles en %s: %s
+                        """,
+                        route.get("code"), route.get("name"), busPlate, destTerminal,
+                        JdbcHelper.instant(trip.get("scheduled_departure_utc")),
+                        JdbcHelper.instant(trip.get("scheduled_arrival_utc")),
+                        soldTickets, parcelCount, parcelWeight, latestRiskLevel,
+                        weatherSummary != null ? weatherSummary : "sin datos recientes",
+                        activeAlerts.isEmpty() ? "ninguna" : String.join(" ; ", activeAlerts),
+                        destTerminal,
+                        reserveBuses.isEmpty() ? "ninguno" : String.join(", ", reserveBuses)
+                );
+
+                Map<String, Object> reqBody = new LinkedHashMap<>();
+                reqBody.put("model", groqModel);
+                reqBody.put("temperature", 0.2);
+                reqBody.put("max_tokens", 850);
+                reqBody.put("messages", List.of(
+                        Map.of("role", "system", "content",
+                                "Eres el copiloto de despacho de Expreso Corredor Central S.A.C. (ruta PE-22 Lima-Huancayo). Devuelve únicamente un objeto JSON válido sin bloques markdown ni texto adicional, con exactamente cuatro campos de texto plano: dictamenEjecutivo, accionRecomendada, justificacionAuditoria, comunicadoOperativo."),
+                        Map.of("role", "user", "content", prompt)
+                ));
+
+                String groqResp = officialGeoClient.post()
+                        .uri(groqBaseUrl)
+                        .header("Authorization", "Bearer " + groqApiKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(reqBody)
+                        .retrieve()
+                        .body(String.class);
+
+                JsonNode root = objectMapper.readTree(groqResp);
+                String rawContent = root.path("choices").path(0).path("message").path("content").asText("");
+                JsonNode parsed = parseAdvisoryJson(rawContent);
+                if (parsed != null && parsed.isObject()) {
+                    status = "CONECTADO";
+                    provider = "GROQ_CLOUD";
+                    model = root.path("model").asText(groqModel);
+                    dictamenEjecutivo = readTextOrJoin(parsed.get("dictamenEjecutivo"), fallbackDictamen);
+                    accionRecomendada = readTextOrJoin(parsed.get("accionRecomendada"), fallbackAccion);
+                    justificacionAuditoria = readTextOrJoin(parsed.get("justificacionAuditoria"), fallbackJustificacion);
+                    comunicadoOperativo = readTextOrJoin(parsed.get("comunicadoOperativo"), fallbackComunicado);
+                }
+            } catch (Exception ex) {
+                status = "RESPALDO_LOCAL";
+                provider = "MOTOR_DETERMINISTA";
+                model = "reglas-corredor-pe22";
+            }
+        }
+
+        double latencyMs = BigDecimal.valueOf((System.nanoTime() - startedNs) / 1_000_000.0)
+                .setScale(2, RoundingMode.HALF_UP).doubleValue();
+        audit.record(auth, "risk", "GENERATE_COPILOT_ADVISORY", "TRIP", id.toString(),
+                "Copiloto=" + provider + " (" + model + ") estado=" + status);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("tripId", id);
+        out.put("status", status);
+        out.put("provider", provider);
+        out.put("model", model);
+        out.put("dictamenEjecutivo", dictamenEjecutivo);
+        out.put("accionRecomendada", accionRecomendada);
+        out.put("justificacionAuditoria", justificacionAuditoria);
+        out.put("comunicadoOperativo", comunicadoOperativo);
+        out.put("latencyMs", latencyMs);
+        out.put("generatedAtUtc", Instant.now().toString());
+        return out;
     }
 
     @GetMapping("/trips/{id}/risk-assessments")
@@ -1142,6 +1286,37 @@ public class WeatherRiskContingencyController {
                 UUID.randomUUID(), segmentId, sourceName, referenceUrl, status, safeDesc, JdbcHelper.ts(validUntil), actor
         );
         return 1;
+    }
+
+    private JsonNode parseAdvisoryJson(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String cleaned = raw.trim();
+        int firstBrace = cleaned.indexOf('{');
+        int lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+            cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+        }
+        try {
+            return objectMapper.readTree(cleaned);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private static String readTextOrJoin(JsonNode node, String fallback) {
+        if (node == null || node.isNull()) {
+            return fallback;
+        }
+        if (node.isArray()) {
+            List<String> parts = new ArrayList<>();
+            node.forEach(item -> parts.add(item.asText()));
+            String joined = String.join(" ", parts).trim();
+            return joined.isBlank() ? fallback : joined;
+        }
+        String val = node.asText("").trim();
+        return val.isBlank() ? fallback : val;
     }
 
     private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {

@@ -34,7 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "app.senamhi-wfs-url=http://127.0.0.1:19997",
                 "app.mtc-concessions-geojson-url=http://127.0.0.1:19997",
                 "app.mtc-alt-routes-geojson-url=http://127.0.0.1:19997",
-                "app.sutran-alerts-url=http://127.0.0.1:19997"
+                "app.sutran-alerts-url=http://127.0.0.1:19997",
+                "app.groq-api-key="
         }
 )
 @ActiveProfiles("test")
@@ -214,6 +215,13 @@ class OperationalFlowsIntegrationTest {
         assertThat(syncDown.statusCode()).isEqualTo(200);
         assertThat(objectMapper.readTree(syncDown.body()).path("senamhiStatus").asText()).isEqualTo("NO_DISPONIBLE");
         assertThat(objectMapper.readTree(syncDown.body()).path("sutranApiStatus").asText()).isEqualTo("NO_DISPONIBLE");
+
+        // Copiloto IA con respaldo local determinista cuando no hay GROQ_API_KEY
+        HttpResponse<String> copilotRes = op.post("/api/v1/trips/" + TRIP_1_ID + "/copilot-advisories", Map.of(), null);
+        assertThat(copilotRes.statusCode()).isEqualTo(200);
+        JsonNode copilotJson = objectMapper.readTree(copilotRes.body());
+        assertThat(copilotJson.path("dictamenEjecutivo").asText()).isNotBlank();
+        assertThat(copilotJson.path("justificacionAuditoria").asText()).isNotBlank();
 
         // Degradación controlada cuando FastAPI y Open-Meteo están caídos
         HttpResponse<String> riskDown = op.post("/api/v1/trips/" + TRIP_1_ID + "/risk-assessments", Map.of(), null);
