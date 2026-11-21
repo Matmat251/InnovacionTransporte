@@ -1,10 +1,18 @@
 {
   "mode": "REAL",
-  "modelVersion": "corredor-central-rf-v1.0.0",
+  "modelVersion": "corredor-central-rf-v2.0.0",
   "selectedCandidate": "randomForestCalibrated",
+  "decisionThreshold": 0.22,
   "calibrated": true,
   "routeScope": [
-    "LIM-HYO-01"
+    "LIM-HYO-01",
+    "HYO-LIM-01",
+    "HYO-LIM-ALT-01",
+    "LIM-TRM-01"
+  ],
+  "supportedThresholdsMinutes": [
+    30,
+    60
   ],
   "delayThresholdMinutes": 30,
   "randomSeed": 42,
@@ -16,75 +24,230 @@
     "max_precipitation_prob_pct",
     "min_temperature_c",
     "max_wind_kmh",
-    "min_visibility_m"
+    "min_visibility_m",
+    "route_LIM-HYO-01",
+    "route_HYO-LIM-01",
+    "route_HYO-LIM-ALT-01",
+    "route_LIM-TRM-01"
   ],
-  "datasetSha256": "59acadb830a69a3d1b435629f4f59328bb0bbcb3552fbb3d84284633b6faeecf",
+  "featureImportances": {
+    "planned_duration_minutes": 0.0235,
+    "departure_hour": 0.0169,
+    "day_of_week": 0.0151,
+    "max_precipitation_mm": 0.2723,
+    "max_precipitation_prob_pct": 0.2422,
+    "min_temperature_c": 0.0654,
+    "max_wind_kmh": 0.0876,
+    "min_visibility_m": 0.2351,
+    "route_LIM-HYO-01": 0.0097,
+    "route_HYO-LIM-01": 0.0276,
+    "route_HYO-LIM-ALT-01": 0.0021,
+    "route_LIM-TRM-01": 0.0026
+  },
+  "datasetSha256": "9a2c77ce5fe125479a6208d44f0fc603715efc125d149a41d6215b4ebb1d7eea",
   "sampleCounts": {
-    "total": 360,
-    "train": 270,
-    "test": 90,
-    "trainPositiveRate": 0.4148,
-    "testPositiveRate": 0.2778
+    "total": 720,
+    "train": 540,
+    "test": 180,
+    "trainPositiveRate": 0.5056,
+    "testPositiveRate": 0.3111
   },
   "temporalSplit": {
     "trainPeriodUtc": [
       "2026-01-01T06:00:00+00:00",
-      "2026-05-15T18:00:00+00:00"
+      "2026-05-16T00:00:00+00:00"
     ],
     "testPeriodUtc": [
       "2026-05-16T06:00:00+00:00",
-      "2026-06-29T18:00:00+00:00"
+      "2026-06-30T00:00:00+00:00"
     ]
   },
   "metrics": {
     "dummyBaseline": {
-      "precision": 0.0,
-      "recall": 0.0,
-      "f1": 0.0,
-      "brierScore": 0.2778,
+      "precision": 0.3111,
+      "recall": 1.0,
+      "f1": 0.4746,
+      "rocAuc": 0.5,
+      "prAuc": 0.3111,
+      "brierScore": 0.6889,
+      "decisionThreshold": 0.5,
       "confusionMatrix": [
         [
-          65,
-          0
+          0,
+          124
         ],
         [
-          25,
-          0
+          0,
+          56
         ]
       ]
     },
     "logisticRegression": {
-      "precision": 0.8182,
-      "recall": 0.36,
-      "f1": 0.5,
-      "brierScore": 0.1309,
+      "precision": 0.573,
+      "recall": 0.9107,
+      "f1": 0.7034,
+      "rocAuc": 0.899,
+      "prAuc": 0.8395,
+      "brierScore": 0.1129,
+      "decisionThreshold": 0.22,
       "confusionMatrix": [
         [
-          63,
-          2
+          86,
+          38
         ],
         [
-          16,
-          9
+          5,
+          51
         ]
       ]
     },
     "randomForestCalibrated": {
-      "precision": 0.9167,
-      "recall": 0.44,
-      "f1": 0.5946,
-      "brierScore": 0.1383,
+      "precision": 0.6571,
+      "recall": 0.8214,
+      "f1": 0.7302,
+      "rocAuc": 0.9061,
+      "prAuc": 0.8498,
+      "brierScore": 0.1138,
+      "decisionThreshold": 0.22,
       "confusionMatrix": [
         [
-          64,
-          1
+          100,
+          24
         ],
         [
-          14,
-          11
+          10,
+          46
         ]
       ]
     }
   },
-  "trainedAtUtc": "2026-11-18T21:49:08.142171+00:00"
+  "metricsByThreshold": {
+    "30": {
+      "selectedCandidate": "randomForestCalibrated",
+      "decisionThreshold": 0.22,
+      "models": {
+        "dummyBaseline": {
+          "precision": 0.3111,
+          "recall": 1.0,
+          "f1": 0.4746,
+          "rocAuc": 0.5,
+          "prAuc": 0.3111,
+          "brierScore": 0.6889,
+          "decisionThreshold": 0.5,
+          "confusionMatrix": [
+            [
+              0,
+              124
+            ],
+            [
+              0,
+              56
+            ]
+          ]
+        },
+        "logisticRegression": {
+          "precision": 0.573,
+          "recall": 0.9107,
+          "f1": 0.7034,
+          "rocAuc": 0.899,
+          "prAuc": 0.8395,
+          "brierScore": 0.1129,
+          "decisionThreshold": 0.22,
+          "confusionMatrix": [
+            [
+              86,
+              38
+            ],
+            [
+              5,
+              51
+            ]
+          ]
+        },
+        "randomForestCalibrated": {
+          "precision": 0.6571,
+          "recall": 0.8214,
+          "f1": 0.7302,
+          "rocAuc": 0.9061,
+          "prAuc": 0.8498,
+          "brierScore": 0.1138,
+          "decisionThreshold": 0.22,
+          "confusionMatrix": [
+            [
+              100,
+              24
+            ],
+            [
+              10,
+              46
+            ]
+          ]
+        }
+      }
+    },
+    "60": {
+      "selectedCandidate": "randomForestCalibrated",
+      "decisionThreshold": 0.2,
+      "models": {
+        "dummyBaseline": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "rocAuc": 0.5,
+          "prAuc": 0.0389,
+          "brierScore": 0.0389,
+          "decisionThreshold": 0.5,
+          "confusionMatrix": [
+            [
+              173,
+              0
+            ],
+            [
+              7,
+              0
+            ]
+          ]
+        },
+        "logisticRegression": {
+          "precision": 0.7,
+          "recall": 1.0,
+          "f1": 0.8235,
+          "rocAuc": 0.9975,
+          "prAuc": 0.9571,
+          "brierScore": 0.0125,
+          "decisionThreshold": 0.28,
+          "confusionMatrix": [
+            [
+              170,
+              3
+            ],
+            [
+              0,
+              7
+            ]
+          ]
+        },
+        "randomForestCalibrated": {
+          "precision": 0.7,
+          "recall": 1.0,
+          "f1": 0.8235,
+          "rocAuc": 0.9992,
+          "prAuc": 0.9821,
+          "brierScore": 0.008,
+          "decisionThreshold": 0.2,
+          "confusionMatrix": [
+            [
+              170,
+              3
+            ],
+            [
+              0,
+              7
+            ]
+          ]
+        }
+      }
+    }
+  },
+  "trainedAtUtc": "2026-11-21T01:05:10.755795+00:00"
 }

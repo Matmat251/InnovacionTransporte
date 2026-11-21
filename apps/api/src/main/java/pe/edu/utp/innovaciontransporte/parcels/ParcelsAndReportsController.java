@@ -246,6 +246,33 @@ public class ParcelsAndReportsController {
         );
     }
 
+    @GetMapping("/reports/audit-logs")
+    public Map<String, Object> listAuditLogs(@RequestParam(defaultValue = "50") int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        List<Map<String, Object>> items = jdbc.query(
+                """
+                SELECT id, correlation_id, actor_username, actor_role, module, action, resource_type, resource_id, summary, occurred_at
+                FROM audit_events
+                ORDER BY occurred_at DESC
+                LIMIT ?
+                """,
+                (rs, i) -> Map.ofEntries(
+                        Map.entry("id", JdbcHelper.uuid(rs.getString("id"))),
+                        Map.entry("correlationId", rs.getString("correlation_id")),
+                        Map.entry("actorUsername", rs.getString("actor_username")),
+                        Map.entry("actorRole", rs.getString("actor_role")),
+                        Map.entry("module", rs.getString("module")),
+                        Map.entry("action", rs.getString("action")),
+                        Map.entry("resourceType", rs.getString("resource_type")),
+                        Map.entry("resourceId", rs.getString("resource_id")),
+                        Map.entry("summary", rs.getString("summary")),
+                        Map.entry("occurredAtUtc", JdbcHelper.instant(rs, "occurred_at").toString())
+                ),
+                safeLimit
+        );
+        return Map.of("items", items);
+    }
+
     public record CreateParcelRequest(
             @NotNull UUID tripId,
             @NotBlank String senderName,

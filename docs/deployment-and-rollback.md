@@ -1,13 +1,14 @@
 # Despliegue Reproducible y Estrategia de Rollback
 
 ## 1. Entorno Local y Demo (`compose.yaml`)
-1. Copiar `.env.example` a `.env` (no commitear `.env`).
+1. Copiar `.env.example` a `.env` (no commitear `.env`). Para el Copiloto Groq definir `GROQ_API_KEY` en `.env`.
 2. Validar configuración: `docker compose -f compose.yaml --env-file .env.example config -q`.
 3. Construir y levantar con healthchecks: `docker compose up -d --build --wait`.
+   - Alternativa local sin Docker con persistencia H2 en disco (`./target/h2-data`): ejecutar el API con `--spring.profiles.active=local` apuntando a `http://127.0.0.1:8000` en `risk`.
 4. Verificar salud:
    - `http://localhost:8080/healthz` -> `ok`
    - `http://localhost:8080/actuator/health` -> `{"status":"UP"}`
-   - `http://localhost:8080/api/v1/system/info` -> `corridor: "Lima-Huancayo"`, `seededRouteSegments: 6`
+   - `http://localhost:8080/api/v1/system/info` -> `corridor: "Lima-Huancayo"`, `seededRouteSegments: 24`
 5. `postgres` y `risk` permanecen en la red `internal_net` sin puertos expuestos al host.
 
 ## 2. Publicación de Artefactos (`release.yml`)
@@ -15,8 +16,8 @@
 - Cuando el repositorio tiene paquetes habilitados en GHCR, publica las imágenes y emite `release-manifest.json` con:
   - Commit SHA
   - Digests inmutables (`sha256:...`) de `web`, `api` y `risk`
-  - Versión del modelo (`demo-logreg-rf-v0.1.0`)
-  - Última migración Flyway (`V1__init_baseline.sql`)
+  - Versión del modelo (`corredor-central-rf-v2.0.0`)
+  - Última migración Flyway (`V5__copilot_advisories_and_risk_factors.sql`)
 
 ## 3. Promoción por `deploy.yml`
 1. Seleccionar `release_tag` y `target_environment` (`local-compose`, `staging`, `production`).

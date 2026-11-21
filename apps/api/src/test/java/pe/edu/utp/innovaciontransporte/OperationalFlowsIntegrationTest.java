@@ -100,6 +100,17 @@ class OperationalFlowsIntegrationTest {
         HttpResponse<String> seatsRes = admin.get("/api/v1/trips/" + newTripId + "/seats");
         assertThat(seatsRes.statusCode()).isEqualTo(200);
         assertThat(objectMapper.readTree(seatsRes.body()).path("seats").size()).isEqualTo(28);
+
+        // Bloqueo temporal (429) tras 5 intentos fallidos consecutivos de login
+        CookieManager lockCm = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+        SessionClient brute = new SessionClient("http://127.0.0.1:" + port, HttpClient.newBuilder().cookieHandler(lockCm).build(), lockCm, objectMapper);
+        brute.refreshCsrf();
+        for (int attempt = 0; attempt < 5; attempt++) {
+            HttpResponse<String> bad = brute.post("/api/v1/auth/login", Map.of("username", "locked.user.test", "password", "Wrong!"), null);
+            assertThat(bad.statusCode()).isEqualTo(401);
+        }
+        HttpResponse<String> locked = brute.post("/api/v1/auth/login", Map.of("username", "locked.user.test", "password", "Wrong!"), null);
+        assertThat(locked.statusCode()).isEqualTo(429);
     }
 
     @Test
@@ -204,6 +215,13 @@ class OperationalFlowsIntegrationTest {
         assertThat(reportJson.path("validTicketRevenuePen").asDouble()).isGreaterThanOrEqualTo(1560.0);
         assertThat(reportJson.path("parcelRevenuePen").asDouble()).isGreaterThanOrEqualTo(230.0);
         assertThat(reportJson.path("occupancyPct").asDouble()).isGreaterThan(0.0);
+
+        HttpResponse<String> auditLogs = op.get("/api/v1/reports/audit-logs?limit=10");
+        assertThat(auditLogs.statusCode()).isEqualTo(200);
+        assertThat(objectMapper.readTree(auditLogs.body()).path("items").size()).isGreaterThan(0);
+
+        HttpResponse<String> modelMeta = op.get("/api/v1/risk-model/metadata");
+        assertThat(modelMeta.statusCode()).isEqualTo(200);
     }
 
     @Test
