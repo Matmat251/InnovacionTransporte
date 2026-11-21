@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
   title: API Interna de Riesgo de Retraso - Expreso Corredor Central
-  version: 0.1.0
+  version: 0.2.0
   description: >
     Contrato interno entre Spring Boot y el servicio FastAPI scikit-learn.
-    Acepta únicamente variables previas a la salida. No recibe PII ni tiempos reales post-viaje.
+    Acepta únicamente variables previas a la salida y rutas/umbrales calibrados. No recibe PII ni tiempos reales post-viaje.
 servers:
   - url: http://risk:8000
     description: Red interna de Docker Compose
@@ -22,9 +22,23 @@ paths:
               example:
                 status: UP
                 service: risk-inference
-                mode: DEMO
-                modelVersion: demo-logreg-rf-v0.1.0
+                mode: REAL
+                modelVersion: corredor-central-rf-v2.0.0
                 defaultThresholdMinutes: 30
+                trainedRoutes: [LIM-HYO-01, HYO-LIM-01, HYO-LIM-ALT-01, LIM-TRM-01]
+                supportedThresholdsMinutes: [30, 60]
+
+  /internal/v1/model-metadata:
+    get:
+      summary: Metadatos de validación temporal, métricas por umbral e importancia de variables
+      responses:
+        "200":
+          description: Metadatos completos del modelo entrenado y calibrado
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
 
   /internal/v1/predictions:
     post:
@@ -67,27 +81,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/PredictionResponse"
               examples:
-                demoOk:
+                modeloCalibradoOk:
                   value:
                     status: OK
-                    mode: DEMO
-                    modelVersion: demo-logreg-rf-v0.1.0
+                    mode: REAL
+                    modelVersion: corredor-central-rf-v2.0.0
                     thresholdMinutes: 30
                     delayProbability: 0.68
+                    decisionThreshold: 0.22
                     calibrated: true
                     riskLevel: ALTO
+                    topFactors:
+                      - "Precipitación máx. (14.2 mm): eleva riesgo (peso 29%)"
+                      - "Visibilidad mín. (1200 m): eleva riesgo (peso 18%)"
+                      - "Probabilidad de lluvia (85%): eleva riesgo (peso 16%)"
                     missingFeatures: []
                     latencyMs: 3.2
                     evaluatedAtUtc: "2026-11-20T11:00:00Z"
                 datosInsuficientes:
                   value:
                     status: INFORMACION_INSUFICIENTE
-                    mode: DEMO
-                    modelVersion: demo-logreg-rf-v0.1.0
+                    mode: REAL
+                    modelVersion: corredor-central-rf-v2.0.0
                     thresholdMinutes: 30
                     delayProbability: null
+                    decisionThreshold: 0.22
                     calibrated: false
                     riskLevel: INFORMACION_INSUFICIENTE
+                    topFactors: []
                     missingFeatures: [weatherSummary]
                     latencyMs: 0.8
                     evaluatedAtUtc: "2026-11-20T11:00:00Z"
@@ -96,13 +117,26 @@ components:
   schemas:
     HealthResponse:
       type: object
-      required: [status, service, mode, modelVersion, defaultThresholdMinutes]
+      required:
+        - status
+        - service
+        - mode
+        - modelVersion
+        - defaultThresholdMinutes
+        - trainedRoutes
+        - supportedThresholdsMinutes
       properties:
         status: { type: string }
         service: { type: string }
         mode: { type: string, enum: [DEMO, REAL] }
         modelVersion: { type: string }
         defaultThresholdMinutes: { type: integer }
+        trainedRoutes:
+          type: array
+          items: { type: string }
+        supportedThresholdsMinutes:
+          type: array
+          items: { type: integer }
 
     WeatherSummary:
       type: object
@@ -143,8 +177,10 @@ components:
         - mode
         - modelVersion
         - thresholdMinutes
+        - decisionThreshold
         - calibrated
         - riskLevel
+        - topFactors
         - missingFeatures
         - latencyMs
         - evaluatedAtUtc
@@ -161,10 +197,17 @@ components:
           type: [number, "null"]
           minimum: 0
           maximum: 1
+        decisionThreshold:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
         calibrated: { type: boolean }
         riskLevel:
           type: string
           enum: [BAJO, MEDIO, ALTO, INFORMACION_INSUFICIENTE]
+        topFactors:
+          type: array
+          items: { type: string }
         missingFeatures:
           type: array
           items: { type: string }

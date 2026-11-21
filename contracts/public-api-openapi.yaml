@@ -33,7 +33,7 @@ paths:
                 delayThresholdMinutes: 30
                 roles: [ADMIN, OPERADOR]
                 schemaInitialized: true
-                seededRouteSegments: 6
+                seededRouteSegments: 24
 
   /auth/login:
     post:
@@ -58,6 +58,12 @@ paths:
                 $ref: "#/components/schemas/UserSummary"
         "401":
           $ref: "#/components/responses/ProblemResponse"
+        "429":
+          description: Demasiados intentos fallidos; bloqueo temporal de 5 minutos
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
 
   /auth/logout:
     post:
@@ -411,9 +417,40 @@ paths:
       summary: Refrescar pronóstico desde Open-Meteo respetando caché y timeout
       parameters:
         - $ref: "#/components/parameters/ResourceId"
+        - name: force
+          in: query
+          schema: { type: boolean, default: false }
       responses:
         "200":
           description: Consulta ejecutada o degradada con estado explícito
+
+  /trips/{id}/official-sources-sync:
+    post:
+      tags: [Clima y Alertas]
+      summary: Sincronizar alertas viales e hidrometeorológicas desde SUTRAN ArcGIS y SENAMHI WFS
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Fuentes consultadas sin bloquear el flujo principal en transacción DB
+
+  /trips/{id}/copilot-advisories:
+    post:
+      tags: [Riesgo y Contingencias]
+      summary: Generar asesoría ejecutiva con Groq validando que solo cite placas reales y persistiendo historial
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Asesoría generada y registrada en copilot_advisories (o degradación controlada)
+
+  /risk-model/metadata:
+    get:
+      tags: [Riesgo y Contingencias]
+      summary: Consultar métricas MLOps de validación temporal, rutas entrenadas y pesos de variables
+      responses:
+        "200":
+          description: Metadatos devueltos por el servicio de riesgo (o fallback explícito si no responde)
 
   /road-alerts:
     post:
@@ -507,6 +544,18 @@ paths:
       responses:
         "200":
           description: Indicadores operativos en PEN
+
+  /reports/audit-logs:
+    get:
+      tags: [Reportes]
+      summary: Consultar eventos recientes de auditoría operativa sin PII
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Bitácora reciente de acciones auditadas
 
 components:
   securitySchemes:

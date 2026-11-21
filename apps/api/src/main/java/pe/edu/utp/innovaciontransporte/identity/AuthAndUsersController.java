@@ -27,20 +27,27 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import pe.edu.utp.innovaciontransporte.common.AuditService;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api/v1")
 public class AuthAndUsersController {
 
     private static final UUID DEMO_COMPANY_ID = UUID.fromString("11111111-1111-1111-1111-111111111101");
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final long LOCK_MINUTES = 5;
 
     private final JdbcTemplate jdbc;
     private final PasswordEncoder passwordEncoder;
     private final SecurityContextRepository securityContextRepository;
     private final AuditService audit;
+    private final ConcurrentHashMap<String, FailedLoginState> failedLogins = new ConcurrentHashMap<>();
 
     public AuthAndUsersController(
             JdbcTemplate jdbc,
@@ -66,19 +73,29 @@ public class AuthAndUsersController {
             HttpServletResponse response,
             CsrfToken csrfToken
     ) {
+        String key = body.username().trim().toLowerCase(Locale.ROOT);
+        FailedLoginState lockState = failedLogins.get(key);
+        if (lockState != null && lockState.lockedUntil() != null && lockState.lockedUntil().isAfter(Instant.now())) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Demasiados intentos fallidos. Espera 5 minutos antes de reintentar.");
+        }
+
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT id, username, password_hash, full_name, role, active FROM app_users WHERE username = ?",
                 body.username().trim()
         );
         if (rows.isEmpty()) {
+            recordFailedLogin(key);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales inválidas.");
         }
         Map<String, Object> row = rows.get(0);
         boolean active = Boolean.TRUE.equals(row.get("active"));
         String hash = String.valueOf(row.get("password_hash"));
         if (!active || !passwordEncoder.matches(body.password(), hash)) {
+            recordFailedLogin(key);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciales inválidas.");
         }
+        failedLogins.remove(key);
 
         String username = String.valueOf(row.get("username"));
         String role = String.valueOf(row.get("role"));
@@ -182,6 +199,19 @@ public class AuthAndUsersController {
         );
         audit.record(auth, "identity", "CREATE_USER", "USER", id.toString(), "Usuario interno creado con rol " + body.role());
         return new UserSummary(id, body.username().trim(), body.fullName().trim(), body.role());
+    }
+
+    private void recordFailedLogin(String key) {
+        failedLogins.compute(key, (k, existing) -> {
+            int nextCount = (existing == null || (existing.lockedUntil() != null && !existing.lockedUntil().isAfter(Instant.now())))
+                    ? 1
+                    : existing.attempts() + 1;
+            Instant until = nextCount >= MAX_FAILED_ATTEMPTS ? Instant.now().plus(LOCK_MINUTES, ChronoUnit.MINUTES) : null;
+            return new FailedLoginState(nextCount, until);
+        });
+    }
+
+    private record FailedLoginState(int attempts, Instant lockedUntil) {
     }
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {

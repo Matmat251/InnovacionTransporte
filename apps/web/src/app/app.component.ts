@@ -92,6 +92,8 @@ export class AppComponent implements OnInit {
   buses: any[] = [];
   usersList: UserSummary[] = [];
   report: any = null;
+  modelMetadata: any = null;
+  auditLogs: any[] = [];
 
   alertForm = {
     segmentId: '',
@@ -171,9 +173,8 @@ export class AppComponent implements OnInit {
     });
   }
 
-  quickLogin(username: string, password: string): void {
-    this.loginForm = { username, password };
-    this.login();
+  prefillUsername(username: string): void {
+    this.loginForm.username = username;
   }
 
   login(): void {
@@ -596,6 +597,14 @@ export class AppComponent implements OnInit {
 
   loadReportsAndCatalogs(): void {
     this.http.get('/api/v1/reports/operations').subscribe({ next: (r) => (this.report = r) });
+    this.http.get('/api/v1/risk-model/metadata').subscribe({
+      next: (m) => (this.modelMetadata = m),
+      error: () => {},
+    });
+    this.http.get<{ items: any[] }>('/api/v1/reports/audit-logs?limit=40').subscribe({
+      next: (res) => (this.auditLogs = res.items || []),
+      error: () => {},
+    });
     this.http.get<{ items: any[] }>('/api/v1/buses?size=50').subscribe({
       next: (b) => {
         this.buses = b.items;
@@ -610,6 +619,37 @@ export class AppComponent implements OnInit {
         error: () => {},
       });
     }
+  }
+
+  exportAuditCsv(): void {
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['Seccion', 'FechaHora_PE', 'Usuario', 'Rol', 'Modulo', 'Accion_o_Indicador', 'Detalle'],
+      ...(this.report
+        ? [
+            ['REPORTE_PEN', new Date().toISOString(), this.currentUser?.username || '', this.currentUser?.role || '', 'reportes', 'INGRESO_PASAJES_PEN', this.report.validTicketRevenuePen],
+            ['REPORTE_PEN', new Date().toISOString(), this.currentUser?.username || '', this.currentUser?.role || '', 'reportes', 'INGRESO_ENCOMIENDAS_PEN', this.report.parcelRevenuePen],
+            ['REPORTE_PEN', new Date().toISOString(), this.currentUser?.username || '', this.currentUser?.role || '', 'reportes', 'OCUPACION_PCT', this.report.occupancyPct],
+          ]
+        : []),
+      ...this.auditLogs.map((a) => [
+        'AUDITORIA',
+        this.formatPeruTime(a.occurredAtUtc),
+        a.actorUsername,
+        a.actorRole,
+        a.module,
+        a.action,
+        a.summary,
+      ]),
+    ];
+    const csv = '\uFEFF' + rows.map((r) => r.map(esc).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `andesroute-auditoria-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   get activeRouteSegments(): any[] {

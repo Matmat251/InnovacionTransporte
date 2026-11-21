@@ -150,12 +150,12 @@
         </div>
 
         <div class="pt-space-md border-t border-outline-variant/40 flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs text-secondary">Selección rápida de perfil autorizado:</span>
+          <span class="text-xs text-secondary">Preseleccionar usuario autorizado (ingresa tu contraseña):</span>
           <div class="flex flex-wrap gap-2">
-            <button type="button" (click)="quickLogin('operador.hyo', 'Demo2026!')" class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold">
+            <button type="button" (click)="prefillUsername('operador.hyo')" class="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold">
               Operador Turno (operador.hyo)
             </button>
-            <button type="button" (click)="quickLogin('admin', 'Demo2026!')" class="px-3 py-1.5 rounded-lg bg-primary-fixed hover:bg-surface-container-highest text-primary text-xs font-semibold">
+            <button type="button" (click)="prefillUsername('admin')" class="px-3 py-1.5 rounded-lg bg-primary-fixed hover:bg-surface-container-highest text-primary text-xs font-semibold">
               Administrador Central (admin)
             </button>
           </div>
@@ -664,6 +664,9 @@
               <p class="text-xs text-secondary">
                 Versión: <code class="font-mono">{{ latestRisk.modelVersion }}</code> · Umbral: {{ latestRisk.thresholdMinutes }} min · Evaluado: {{ formatPeruTime(latestRisk.evaluatedAtUtc) }}
               </p>
+              <ul *ngIf="latestRisk.topFactors?.length" class="mt-1 flex flex-col gap-0.5 text-[11px] text-primary">
+                <li *ngFor="let f of latestRisk.topFactors">• {{ f }}</li>
+              </ul>
               <p *ngIf="latestRisk.missingFeatures" class="text-xs text-error">Faltantes: {{ latestRisk.missingFeatures }}</p>
             </div>
             <p *ngIf="!latestRisk" class="text-xs text-secondary">Aún no se ejecutó evaluación de riesgo en este viaje.</p>
@@ -1163,6 +1166,57 @@
               </div>
               <button type="submit" [disabled]="busy" class="h-9 rounded-lg bg-primary text-on-primary text-xs font-semibold">Crear Usuario Interno</button>
             </form>
+          </div>
+        </article>
+
+        <!-- Panel MLOps y Matriz de Confusión del Modelo -->
+        <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm" *ngIf="modelMetadata && modelMetadata.metrics">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-base font-semibold text-primary">Métricas MLOps y Validación Temporal</h2>
+              <p class="text-xs text-secondary">
+                Modelo activo: <code class="font-mono font-semibold text-primary">{{ modelMetadata.selectedCandidate }}</code> ·
+                Versión <code class="font-mono">{{ modelMetadata.modelVersion }}</code> ·
+                Umbral operativo: <code class="font-mono">{{ modelMetadata.decisionThreshold }}</code> ·
+                Rutas entrenadas: {{ modelMetadata.routeScope?.join(', ') }}
+              </p>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[10px] font-bold">CALIBRADO · ROC/PR</span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs">
+            <div class="p-2.5 rounded-lg bg-surface-container-low"><span class="text-[10px] text-secondary block">Recall (Sensib.)</span><strong class="font-mono text-primary text-sm">{{ (modelMetadata.metrics[modelMetadata.selectedCandidate]?.recall * 100) | number:'1.1-1' }}%</strong></div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low"><span class="text-[10px] text-secondary block">Precision</span><strong class="font-mono text-primary text-sm">{{ (modelMetadata.metrics[modelMetadata.selectedCandidate]?.precision * 100) | number:'1.1-1' }}%</strong></div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low"><span class="text-[10px] text-secondary block">F1 Score</span><strong class="font-mono text-primary text-sm">{{ modelMetadata.metrics[modelMetadata.selectedCandidate]?.f1 }}</strong></div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low"><span class="text-[10px] text-secondary block">ROC AUC</span><strong class="font-mono text-primary text-sm">{{ modelMetadata.metrics[modelMetadata.selectedCandidate]?.rocAuc }}</strong></div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low"><span class="text-[10px] text-secondary block">PR AUC</span><strong class="font-mono text-primary text-sm">{{ modelMetadata.metrics[modelMetadata.selectedCandidate]?.prAuc }}</strong></div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low"><span class="text-[10px] text-secondary block">Brier Score</span><strong class="font-mono text-primary text-sm">{{ modelMetadata.metrics[modelMetadata.selectedCandidate]?.brierScore }}</strong></div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low"><span class="text-[10px] text-secondary block">Matriz [[VN,FP],[FN,VP]]</span><strong class="font-mono text-primary text-xs">{{ modelMetadata.metrics[modelMetadata.selectedCandidate]?.confusionMatrix | json }}</strong></div>
+          </div>
+        </article>
+
+        <!-- Bitácora de Auditoría en Tiempo Real + Exportación CSV -->
+        <article class="bg-surface-container-lowest rounded-xl p-space-lg border border-outline-variant/40 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 class="text-base font-semibold text-primary">Bitácora de Auditoría en Tiempo Real (Sin PII)</h2>
+            <button type="button" (click)="exportAuditCsv()" class="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-xs font-semibold">
+              Exportar CSV
+            </button>
+          </div>
+          <div class="overflow-x-auto max-h-72 overflow-y-auto">
+            <table class="w-full text-xs text-left">
+              <thead class="bg-surface-container-low text-secondary uppercase text-[10px]">
+                <tr><th class="p-2">Hora (PE)</th><th class="p-2">Actor</th><th class="p-2">Módulo / Acción</th><th class="p-2">Resumen</th><th class="p-2">Correlación</th></tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let ev of auditLogs" class="border-b border-outline-variant/30">
+                  <td class="p-2 font-mono">{{ formatPeruTime(ev.occurredAtUtc) }}</td>
+                  <td class="p-2 font-mono">{{ ev.actorUsername }} ({{ ev.actorRole }})</td>
+                  <td class="p-2 font-semibold text-primary">{{ ev.module }} · {{ ev.action }}</td>
+                  <td class="p-2">{{ ev.summary }}</td>
+                  <td class="p-2 font-mono text-[10px] text-secondary">{{ ev.correlationId }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </article>
       </section>
